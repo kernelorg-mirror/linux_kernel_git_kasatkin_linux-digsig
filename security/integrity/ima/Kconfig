@@ -69,3 +69,21 @@ config IMA_APPRAISE
 	  For more information on integrity appraisal refer to:
 	  <http://linux-ima.sourceforge.net>
 	  If unsure, say N.
+
+config IMA_APPRAISE_DIGSIG
+	boolean "IMA Digital Signature support"
+	depends on IMA_APPRAISE
+	default n
+	select CRYPTO_KSIGN_RSA
+	help
+	  This option enables RSA signature based integrity appraisal.
+	  It requires the system to be labeled with a security extended
+	  attribute containing the file digital signature.
+	  A file, which is protected with digital signature, is an immutable.
+	  Modification of the file will not replace the signature with a hash.
+	  Consequent appraisal will fail.
+	  
+	  To protect the security extended attributes from offline attack,
+	  enable and configure EVM.
+
+	  If unsure, say N.

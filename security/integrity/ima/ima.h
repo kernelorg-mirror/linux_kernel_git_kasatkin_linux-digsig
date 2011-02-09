@@ -23,6 +23,7 @@
 #include <linux/hash.h>
 #include <linux/tpm.h>
 #include <linux/audit.h>
+#include <linux/crypto/ksign.h>
 
 #include "../integrity.h"
 
@@ -181,4 +182,23 @@ static inline int security_filter_rule_match(u32 secid, u32 field, u32 op,
 	return -EINVAL;
 }
 #endif /* CONFIG_IMA_LSM_RULES */
+
+#ifdef CONFIG_IMA_APPRAISE_DIGSIG
+
+static inline int ima_sign_verify(const char *sig, int siglen,
+		       const char *digest, int digestlen)
+{
+	return ksign_verify(NULL, sig, siglen, digest, digestlen);
+}
+
+#else
+
+static inline int ima_sign_verify(const char *sig, int siglen,
+		       const char *digest, int digestlen)
+{
+	return -EOPNOTSUPP;
+}
+
+#endif /* CONFIG_IMA_APPRAISE_DIGSIG */
+
 #endif

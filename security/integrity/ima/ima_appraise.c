@@ -59,10 +59,10 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 {
 	struct dentry *dentry = file->f_dentry;
 	struct inode *inode = dentry->d_inode;
-	struct evm_ima_xattr_data xattr_value;
+	struct evm_ima_xattr_data *xattr_value = NULL;
 	enum integrity_status status = INTEGRITY_UNKNOWN;
 	const char *op = "appraise_data";
-	char *cause = "unknown";
+	char *cause = "unknown", type = 0;
 	int rc;
 
 	if (!ima_appraise || !inode->i_op->getxattr)
@@ -70,8 +70,8 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 	if (iint->flags & IMA_APPRAISED)
 		return iint->ima_status;
 
-	rc = inode->i_op->getxattr(dentry, XATTR_NAME_IMA, (u8 *)&xattr_value,
-				   sizeof xattr_value);
+	rc = vfs_getxattr_alloc(dentry, XATTR_NAME_IMA, (char **)&xattr_value,
+				0, GFP_NOFS);
 	if (rc <= 0) {
 		if (rc && rc != -ENODATA)
 			goto out;
@@ -82,7 +82,7 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 		goto out;
 	}
 
-	status = evm_verifyxattr(dentry, XATTR_NAME_IMA, (u8 *)&xattr_value,
+	status = evm_verifyxattr(dentry, XATTR_NAME_IMA, xattr_value,
 				 rc, iint);
 	if ((status != INTEGRITY_PASS) && (status != INTEGRITY_UNKNOWN)) {
 		if (status == INTEGRITY_NOLABEL)
@@ -92,30 +92,55 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 		goto out;
 	}
 
-	rc = memcmp(xattr_value.digest, iint->ima_xattr.digest,
-		    IMA_DIGEST_SIZE);
-	if (rc) {
-		status = INTEGRITY_FAIL;
-		cause = "invalid-hash";
-		print_hex_dump_bytes("security.ima: ", DUMP_PREFIX_NONE,
-				     &xattr_value, sizeof xattr_value);
-		print_hex_dump_bytes("collected: ", DUMP_PREFIX_NONE,
-				     (u8 *)&iint->ima_xattr,
-				     sizeof iint->ima_xattr);
-		goto out;
+	switch (xattr_value->type) {
+	case IMA_XATTR_DIGEST:
+		rc = memcmp(xattr_value->digest, &iint->ima_xattr.digest,
+			    IMA_DIGEST_SIZE);
+		if (rc) {
+			cause = "invalid-hash";
+			status = INTEGRITY_FAIL;
+			print_hex_dump_bytes("security.ima: ", DUMP_PREFIX_NONE,
+					&xattr_value, sizeof xattr_value);
+			print_hex_dump_bytes("collected: ", DUMP_PREFIX_NONE,
+					(u8 *)&iint->ima_xattr,
+					sizeof iint->ima_xattr);
+			break;
+		}
+		status = INTEGRITY_PASS;
+		break;
+	case EVM_IMA_XATTR_DIGSIG:
+		iint->flags |= IMA_DIGSIG;
+		rc = ima_sign_verify(xattr_value->digest, rc - 1,
+			iint->ima_xattr.digest, IMA_DIGEST_SIZE);
+		if (rc == -EOPNOTSUPP) {
+			status = INTEGRITY_UNKNOWN;
+		} else if (rc) {
+			cause = "invalid-signature";
+			status = INTEGRITY_FAIL;
+		} else {
+			status = INTEGRITY_PASS;
+		}
+		break;
+	default:
+		status = INTEGRITY_UNKNOWN;
+		cause = "unknown-ima-data";
+		break;
 	}
-	status = INTEGRITY_PASS;
-	iint->flags |= IMA_APPRAISED;
+
 out:
 	if (status != INTEGRITY_PASS) {
-		if (ima_appraise & IMA_APPRAISE_FIX) {
+		if ((ima_appraise & IMA_APPRAISE_FIX)
+				   && (type != EVM_IMA_XATTR_DIGSIG)) {
 			ima_fix_xattr(dentry, iint);
 			status = INTEGRITY_PASS;
 		}
 		integrity_audit_msg(AUDIT_INTEGRITY_DATA, inode, filename,
 				    op, cause, 1, 0);
+	} else {
+		iint->flags |= IMA_APPRAISED;
 	}
 	iint->ima_status = status;
+	kfree(xattr_value);
 	return status;
 }
 
@@ -137,5 +162,7 @@ void ima_update_xattr(struct integrity_iint_cache *iint, struct file *file)
 		file->f_mode &= ~FMODE_READ;
 	if (rc < 0)
 		return;
-	ima_fix_xattr(dentry, iint);
+
+	if (!(iint->flags & IMA_DIGSIG))
+		ima_fix_xattr(dentry, iint);
 }
