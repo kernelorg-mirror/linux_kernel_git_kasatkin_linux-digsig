@@ -10,3 +10,17 @@ config EVM
 	  integrity attacks.
 
 	  If you are unsure how to answer this question, answer N.
+
+config EVM_DIGSIG
+	boolean "EVM Digital Signature support"
+	depends on EVM
+	default n
+	select CRYPTO_KSIGN_RSA
+	help
+	  When building an image, which has to be flashed to different
+	  devices, an HMAC cannot be used to sign file metadata, as
+	  the HMAC key is different on every device.
+	  File metadata can be protected using digital signature.
+	  This option enables RSA signature based integrity verification.
+
+	  If unsure, say N.

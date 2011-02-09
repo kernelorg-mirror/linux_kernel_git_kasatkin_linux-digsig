@@ -25,6 +25,7 @@
 int evm_initialized;
 
 char *evm_hmac = "hmac(sha1)";
+char *evm_hash = "sha1";
 
 char *evm_config_xattrnames[] = {
 #ifdef CONFIG_SECURITY_SELINUX
@@ -68,39 +69,71 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 					     size_t xattr_value_len,
 					     struct integrity_iint_cache *iint)
 {
-	struct evm_ima_xattr_data xattr_data;
+	struct evm_ima_xattr_data *xattr_data = NULL;
+	struct evm_ima_xattr_data calc;
 	enum integrity_status evm_status;
-	int rc;
+	int rc, xattr_len;
 
 	if (iint && iint->evm_status == INTEGRITY_PASS)
 		return iint->evm_status;
 
 	/* if status is not PASS, try to check again - against -ENOMEM */
 
-	rc = evm_calc_hmac(dentry, xattr_name, xattr_value,
-			   xattr_value_len, xattr_data.digest);
-	if (rc < 0)
-		goto err_out;
+	/* first need to know the sig type */
+	rc = vfs_getxattr_alloc(dentry, XATTR_NAME_EVM, (char **)&xattr_data, 0,
+				GFP_NOFS);
+	if (rc <= 0) {
+		if (rc == 0)
+			rc = -EINVAL;
+		goto out;
+	}
 
-	xattr_data.type = EVM_XATTR_HMAC;
-	rc = vfs_xattr_cmp(dentry, XATTR_NAME_EVM, (u8 *)&xattr_data,
-			   sizeof xattr_data, GFP_NOFS);
-	if (rc < 0)
-		goto err_out;
-	evm_status = INTEGRITY_PASS;
-	goto out;
+	xattr_len = rc - 1;
 
-err_out:
+	/* check value type */
+	switch (xattr_data->type) {
+	case EVM_XATTR_HMAC:
+		rc = evm_calc_hmac(dentry, xattr_name, xattr_value,
+				   xattr_value_len, calc.digest);
+		if (rc)
+			break;
+		rc = memcmp(xattr_data->digest, calc.digest,
+			    sizeof(calc.digest));
+		if (rc)
+			rc = -EINVAL;
+		break;
+	case EVM_IMA_XATTR_DIGSIG:
+		rc = evm_calc_hash(dentry, xattr_name, xattr_value,
+				xattr_value_len, calc.digest);
+		if (rc)
+			break;
+		rc = evm_sign_verify(xattr_data->digest, xattr_len,
+				     calc.digest, sizeof(calc.digest));
+		if (!rc) {
+			/* we probably want to replace rsa with hmac here */
+			evm_update_evmxattr(dentry, xattr_name, xattr_value,
+				   xattr_value_len);
+		}
+		break;
+	default:
+		rc = -EINVAL;
+		break;
+	}
+
+out:
 	switch (rc) {
+	case 0:
+		evm_status = INTEGRITY_PASS;
+		break;
 	case -ENODATA:		/* file not labelled */
 		evm_status = INTEGRITY_NOLABEL;
 		break;
 	default:
 		evm_status = INTEGRITY_FAIL;
 	}
-out:
 	if (iint)
 		iint->evm_status = evm_status;
+	kfree(xattr_data);
 	return evm_status;
 }
 
@@ -366,6 +399,8 @@ static void __exit cleanup_evm(void)
 	evm_cleanup_secfs();
 	if (hmac_tfm)
 		crypto_free_shash(hmac_tfm);
+	if (hash_tfm)
+		crypto_free_shash(hash_tfm);
 }
 
 /*
