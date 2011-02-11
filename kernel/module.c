@@ -58,6 +58,7 @@
 #include <linux/jump_label.h>
 #include <linux/pfn.h>
 #include <linux/bsearch.h>
+#include <linux/ima.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/module.h>
@@ -2741,6 +2742,7 @@ static struct module *load_module(void __user *umod,
 	struct load_info info = { NULL, };
 	struct module *mod;
 	long err;
+	char *args = NULL;
 
 	DEBUGP("load_module: umod=%p, len=%lu, uargs=%p\n",
 	       umod, len, uargs);
@@ -2749,6 +2751,16 @@ static struct module *load_module(void __user *umod,
 	err = copy_and_check(&info, umod, len, uargs);
 	if (err)
 		return ERR_PTR(err);
+
+	args = strndup_user(uargs, ~0UL >> 1);
+	if (IS_ERR(args)) {
+		err = PTR_ERR(args);
+		goto free_copy;
+	}
+
+	err = ima_module_check(info.hdr, info.len, &args);
+	if (err < 0)
+		goto free_copy;
 
 	/* Figure out module layout, and allocate all the memory. */
 	mod = layout_and_allocate(&info);
@@ -2789,11 +2801,8 @@ static struct module *load_module(void __user *umod,
 	flush_module_icache(mod);
 
 	/* Now copy in args */
-	mod->args = strndup_user(uargs, ~0UL >> 1);
-	if (IS_ERR(mod->args)) {
-		err = PTR_ERR(mod->args);
-		goto free_arch_cleanup;
-	}
+	mod->args = args;
+	args = NULL;
 
 	/* Mark state as coming so strong_try_module_get() ignores us. */
 	mod->state = MODULE_STATE_COMING;
@@ -2864,6 +2873,7 @@ static struct module *load_module(void __user *umod,
  free_module:
 	module_deallocate(mod, &info);
  free_copy:
+	kfree(args);
 	free_copy(&info);
 	return ERR_PTR(err);
 }

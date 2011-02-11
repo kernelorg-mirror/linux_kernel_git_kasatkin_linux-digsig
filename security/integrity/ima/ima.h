@@ -44,6 +44,7 @@ extern int ima_initialized;
 extern int ima_used_chip;
 extern char *ima_hash;
 extern int ima_appraise;
+extern int ima_module_checks_enabled;
 
 /* IMA inode template definition */
 struct ima_template_data {
@@ -119,7 +120,8 @@ struct integrity_iint_cache *integrity_iint_insert(struct inode *inode);
 struct integrity_iint_cache *integrity_iint_find(struct inode *inode);
 
 /* IMA policy related functions */
-enum ima_hooks { FILE_CHECK = 1, FILE_MMAP, BPRM_CHECK, POST_SETATTR };
+enum ima_hooks { FILE_CHECK = 1, FILE_MMAP, BPRM_CHECK, POST_SETATTR,
+		 MODULE_CHECK };
 
 int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask);
 int ima_match_appraise_policy(struct inode *inode, enum ima_hooks func,

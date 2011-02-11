@@ -23,12 +23,14 @@ Description:
 			lsm:	[[subj_user=] [subj_role=] [subj_type=]
 				 [obj_user=] [obj_role=] [obj_type=]]
 
-		base: 	func:= [BPRM_CHECK][FILE_MMAP][FILE_CHECK]
+		base: 	func:= [BPRM_CHECK][FILE_MMAP][FILE_CHECK][MODULE_CHECK]
 			mask:= [MAY_READ] [MAY_WRITE] [MAY_APPEND] [MAY_EXEC]
 			fsmagic:= hex value
 			uid:= decimal value
 			fowner:=decimal value
 		lsm:  	are LSM specific
+
+		*func=MODULE_CHECK is a special case (all other options ignored)
 
 		default policy:
 			# PROC_SUPER_MAGIC

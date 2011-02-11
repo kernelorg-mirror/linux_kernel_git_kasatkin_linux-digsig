@@ -50,6 +50,8 @@ struct ima_measure_rule_entry {
 	} lsm[MAX_LSM_RULES];
 };
 
+static int module_checks_enabled;
+
 /*
  * Without LSM specific knowledge, the default policy can only be
  * written in terms of .action, .func, .mask, .fsmagic, .uid, and .fowner
@@ -248,6 +250,7 @@ void ima_update_policy(void)
 
 	if (ima_measure == &measure_default_rules) {
 		ima_measure = &measure_policy_rules;
+		ima_module_checks_enabled = module_checks_enabled;
 		cause = "complete";
 		result = 0;
 	}
@@ -376,7 +379,10 @@ static int ima_parse_rule(char *rule, struct ima_measure_rule_entry *entry)
 				entry->func = FILE_MMAP;
 			else if (strcmp(args[0].from, "BPRM_CHECK") == 0)
 				entry->func = BPRM_CHECK;
-			else
+			else if (strcmp(args[0].from, "MODULE_CHECK") == 0) {
+				entry->func = MODULE_CHECK;
+				module_checks_enabled = 1;
+			} else
 				result = -EINVAL;
 			if (!result)
 				entry->flags |= IMA_FUNC;

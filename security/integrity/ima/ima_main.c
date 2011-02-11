@@ -28,6 +28,7 @@
 #include "ima.h"
 
 int ima_initialized;
+int ima_module_checks_enabled;
 
 #ifdef CONFIG_IMA_APPRAISE
 int ima_appraise = IMA_APPRAISE_ENABLED | IMA_APPRAISE_ENFORCE;
@@ -279,6 +280,23 @@ void ima_inode_post_setattr(struct dentry *dentry)
 	if (!must_appraise)
 		rc = inode->i_op->removexattr(dentry, XATTR_NAME_IMA);
 	return;
+}
+
+int ima_module_check(const void *hdr, const unsigned long len, char **args)
+{
+	int result = -EINVAL;
+
+	if (len <= 0)
+		return result;
+
+	if (!ima_module_checks_enabled)
+		return 0;
+
+	/* Different methods for verifying module integrity have
+	 * been proposed (eg. file hashes, digital signatures).
+	 */
+
+	return 0;
 }
 
 /*
