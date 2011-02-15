@@ -24,6 +24,7 @@
 #include <linux/slab.h>
 #include <linux/xattr.h>
 #include <linux/ima.h>
+#include <linux/crypto/ksign.h>
 
 #include "ima.h"
 
@@ -52,7 +53,7 @@ __setup("ima_hash=", hash_setup);
  * 	- Opening a file for write when already open for read,
  *	  results in a time of measure, time of use (ToMToU) error.
  *	- Opening a file for read when already open for write,
- * 	  could result in a file measurement error.
+ *	  could result in a file measurement error.
  *
  */
 static void ima_rdwr_violation_check(struct file *file)
@@ -284,19 +285,49 @@ void ima_inode_post_setattr(struct dentry *dentry)
 
 int ima_module_check(const void *hdr, const unsigned long len, char **args)
 {
-	int result = -EINVAL;
-
-	if (len <= 0)
-		return result;
+	u8 digest[IMA_DIGEST_SIZE];
+	int rc = -EINVAL, siglen;
+	char *mod_args, *sig, *tmp;
 
 	if (!ima_module_checks_enabled)
 		return 0;
 
-	/* Different methods for verifying module integrity have
-	 * been proposed (eg. file hashes, digital signatures).
-	 */
+	if (len <= 0)
+		goto out;
 
-	return 0;
+	if (strncmp(*args, "ima=", 4) != 0) {
+		pr_err("IMA: missing 'ima=' option: %d", rc);
+		goto out;
+	}
+
+	/* module signature */
+	mod_args = *args + 4;
+	sig = strsep(&mod_args, " \t");
+	tmp = *args;
+	*args = kstrdup(mod_args ?: "", GFP_KERNEL);
+	kfree(tmp);
+	if (!*args) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	siglen = strlen(sig);
+	hex2bin((u8 *)sig, sig, siglen);
+	siglen >>= 1;
+
+	rc = ima_calc_module_hash(hdr, len, digest);
+	if (rc < 0)
+		goto out;
+
+	rc = ima_sign_verify(sig, len, digest, IMA_DIGEST_SIZE);
+	if (rc) {
+		pr_err("IMA: module verification failed: %d", rc);
+		print_hex_dump(KERN_ERR, "hash: ", DUMP_PREFIX_NONE, 32, 1,
+			       digest, IMA_DIGEST_SIZE, 0);
+	}
+
+out:
+	return (ima_appraise & IMA_APPRAISE_ENFORCE) ? rc : 0;
 }
 
 /*

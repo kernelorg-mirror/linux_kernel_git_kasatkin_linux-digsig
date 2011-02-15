@@ -81,6 +81,8 @@ int ima_add_template_entry(struct ima_template_entry *entry, int violation,
 			   const char *op, struct inode *inode);
 int ima_calc_hash(struct file *file, char *digest);
 int ima_calc_template_hash(int template_len, void *template, char *digest);
+int ima_calc_module_hash(const void *module, const int module_len,
+			 char *digest);
 int ima_calc_boot_aggregate(char *digest);
 void ima_add_violation(struct inode *inode, const unsigned char *filename,
 		       const char *op, const char *cause);

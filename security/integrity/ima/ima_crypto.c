@@ -10,7 +10,7 @@
  * the Free Software Foundation, version 2 of the License.
  *
  * File: ima_crypto.c
- * 	Calculates md5/sha1 file hash, template hash, boot-aggreate hash
+ *	Calculates md5/sha1 file hash, template hash, boot-aggreate hash
  */
 
 #include <linux/kernel.h>
@@ -20,6 +20,53 @@
 #include <linux/err.h>
 #include <linux/slab.h>
 #include "ima.h"
+
+/* last page - first page + 1 */
+#define PAGECOUNT(buf, buflen) \
+	((((unsigned long)(buf + buflen - 1) & PAGE_MASK) >> PAGE_SHIFT) - \
+	(((unsigned long) buf               & PAGE_MASK) >> PAGE_SHIFT) + 1)
+
+/* offset of buf in it's first page */
+#define PAGEOFFSET(buf) ((unsigned long)buf & ~PAGE_MASK)
+
+/**
+ * vmalloc_to_sg() - Make scatterlist from vmallocated buffer
+ * @virt: vmallocated buffer
+ * @len:  buffer length
+ *
+ * Asynchronous SHA1 calculation is using scatterlist data. This
+ * function can be used to create scatterlist from vmallocated
+ * data buffer.
+ *
+ * Return pointer to scatterlist or NULL.
+ */
+static struct scatterlist *vmalloc_to_sg(const void *virt, unsigned long len)
+{
+	int nr_pages = PAGECOUNT(virt, len);
+	struct scatterlist *sglist;
+	struct page *pg;
+	int i;
+	int pglen;
+	int pgoff;
+
+	sglist = vmalloc(nr_pages * sizeof(*sglist));
+	if (!sglist)
+		return NULL;
+	memset(sglist, 0, nr_pages * sizeof(*sglist));
+	sg_init_table(sglist, nr_pages);
+	for (i = 0; i < nr_pages; i++, virt += pglen, len -= pglen) {
+		pg = vmalloc_to_page(virt);
+		if (!pg)
+			goto err;
+		pgoff = PAGEOFFSET(virt);
+		pglen = min((PAGE_SIZE - pgoff), len);
+		sg_set_page(&sglist[i], pg, pglen, pgoff);
+	}
+	return sglist;
+err:
+	vfree(sglist);
+	return NULL;
+}
 
 static int init_desc(struct hash_desc *desc)
 {
@@ -86,24 +133,46 @@ out:
 }
 
 /*
- * Calculate the hash of a given template
+ * Calculate the hash of a buffer
  */
-int ima_calc_template_hash(int template_len, void *template, char *digest)
+int ima_calc_buffer_hash(const void *buffer, int vbuf, const int buffer_len,
+			 char *digest)
 {
 	struct hash_desc desc;
-	struct scatterlist sg[1];
-	int rc;
+	struct scatterlist sg[1], *sgp = sg;
+	int rc = -ENOMEM;
 
 	rc = init_desc(&desc);
 	if (rc != 0)
 		return rc;
 
-	sg_init_one(sg, template, template_len);
-	rc = crypto_hash_update(&desc, sg, template_len);
+	if (vbuf) {
+		sgp = vmalloc_to_sg(buffer, buffer_len);
+		if (!sgp)
+			goto err;
+	} else {
+		sg_init_one(sgp, buffer, buffer_len);
+	}
+
+	rc = crypto_hash_update(&desc, sgp, buffer_len);
 	if (!rc)
 		rc = crypto_hash_final(&desc, digest);
+
+	if (vbuf)
+		vfree(sgp);
+err:
 	crypto_free_hash(desc.tfm);
 	return rc;
+}
+
+int ima_calc_template_hash(int template_len, void *template, char *digest)
+{
+	return ima_calc_buffer_hash(template, 0, template_len, digest);
+}
+
+int ima_calc_module_hash(const void *module, const int module_len, char *digest)
+{
+	return ima_calc_buffer_hash(module, 1, module_len, digest);
 }
 
 static void __init ima_pcrread(int idx, u8 *pcr)

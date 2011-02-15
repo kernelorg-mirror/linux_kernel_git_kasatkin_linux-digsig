@@ -83,6 +83,7 @@ static struct ima_measure_rule_entry default_rules[] = {
 	{.action = DONT_APPRAISE,.fsmagic = SECURITYFS_MAGIC,.flags = IMA_FSMAGIC},
 	{.action = DONT_APPRAISE,.fsmagic = SELINUX_MAGIC,.flags = IMA_FSMAGIC},
 	{.action = APPRAISE,.fowner = 0,.flags = IMA_FOWNER},
+	{.action = APPRAISE,.func = MODULE_CHECK,.flags = IMA_FUNC},
 };
 
 static LIST_HEAD(measure_default_rules);
@@ -224,10 +225,12 @@ void __init ima_init_policy(void)
 	int i, entries;
 
 	/* if !ima_use_tcb set entries = 0 so we load NO default rules */
-	if (ima_use_tcb)
+	if (ima_use_tcb) {
 		entries = ARRAY_SIZE(default_rules);
-	else
+		ima_module_checks_enabled = 1;
+	} else {
 		entries = 0;
+	}
 
 	for (i = 0; i < entries; i++)
 		list_add_tail(&default_rules[i].list, &measure_default_rules);
