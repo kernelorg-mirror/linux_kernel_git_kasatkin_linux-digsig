@@ -19,6 +19,7 @@
 #include <linux/xattr.h>
 #include <linux/integrity.h>
 #include <linux/evm.h>
+#include <crypto/hash.h>
 #include "evm.h"
 
 int evm_initialized;
@@ -282,12 +283,10 @@ out:
 }
 EXPORT_SYMBOL_GPL(evm_inode_post_init_security);
 
-static struct crypto_hash *tfm_hmac;	/* preload crypto alg */
 static int __init init_evm(void)
 {
 	int error;
 
-	tfm_hmac = crypto_alloc_hash(evm_hmac, 0, CRYPTO_ALG_ASYNC);
 	error = evm_init_secfs();
 	if (error < 0) {
 		printk(KERN_INFO "EVM: Error registering secfs\n");
@@ -300,7 +299,8 @@ err:
 static void __exit cleanup_evm(void)
 {
 	evm_cleanup_secfs();
-	crypto_free_hash(tfm_hmac);
+	if (hmac_tfm)
+		crypto_free_shash(hmac_tfm);
 }
 
 /*
