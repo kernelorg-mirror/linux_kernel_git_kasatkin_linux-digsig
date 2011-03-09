@@ -20,6 +20,8 @@ extern int evm_initialized;
 extern char *evm_hmac;
 extern int evm_hmac_size;
 
+extern struct crypto_shash *hmac_tfm;
+
 /* List of EVM protected security xattrs */
 extern char *evm_config_xattrnames[];
 
