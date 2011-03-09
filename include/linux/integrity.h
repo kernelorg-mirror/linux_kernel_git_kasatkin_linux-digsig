@@ -19,6 +19,12 @@ enum integrity_status {
 	INTEGRITY_UNKNOWN,
 };
 
+enum evm_ima_xattr_type {
+	IMA_XATTR_DIGEST = 0x01,
+	EVM_XATTR_HMAC,
+	EVM_IMA_XATTR_DIGSIG,
+};
+
 #ifdef CONFIG_INTEGRITY
 extern int integrity_inode_alloc(struct inode *inode);
 extern void integrity_inode_free(struct inode *inode);

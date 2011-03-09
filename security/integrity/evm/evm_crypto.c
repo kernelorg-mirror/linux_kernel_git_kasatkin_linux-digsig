@@ -138,14 +138,16 @@ int evm_update_evmxattr(struct dentry *dentry, const char *xattr_name,
 			const char *xattr_value, size_t xattr_value_len)
 {
 	struct inode *inode = dentry->d_inode;
-	u8 hmac[MAX_DIGEST_SIZE];
+	u8 hmac[MAX_DIGEST_SIZE + 1];
 	int rc = 0;
 
 	rc = evm_calc_hmac(dentry, xattr_name, xattr_value,
-			   xattr_value_len, hmac);
-	if (rc == 0)
+			   xattr_value_len, hmac + 1);
+	if (rc == 0) {
+		hmac[0] = EVM_XATTR_HMAC;
 		rc = __vfs_setxattr_noperm(dentry, XATTR_NAME_EVM,
-					   hmac, evm_hmac_size, 0);
+					   hmac, evm_hmac_size + 1, 0);
+	}
 	else if (rc == -ENODATA)
 		rc = inode->i_op->removexattr(dentry, XATTR_NAME_EVM);
 	return rc;

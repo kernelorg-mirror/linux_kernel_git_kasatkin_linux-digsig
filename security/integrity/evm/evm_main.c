@@ -52,7 +52,7 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 					     size_t xattr_value_len,
 					     struct integrity_iint_cache *iint)
 {
-	char hmac_val[MAX_DIGEST_SIZE];
+	char hmac_val[MAX_DIGEST_SIZE + 1];
 	int rc;
 
 	if (iint->hmac_status != INTEGRITY_UNKNOWN)
@@ -60,10 +60,11 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 
 	memset(hmac_val, 0, sizeof hmac_val);
 	rc = evm_calc_hmac(dentry, xattr_name, xattr_value,
-			   xattr_value_len, hmac_val);
+			   xattr_value_len, hmac_val + 1);
 	if (rc < 0)
 		return INTEGRITY_UNKNOWN;
 
+	hmac_val[0] = EVM_XATTR_HMAC;
 	rc = vfs_xattr_cmp(dentry, XATTR_NAME_EVM, hmac_val, sizeof hmac_val,
 			   GFP_NOFS);
 	if (rc < 0)

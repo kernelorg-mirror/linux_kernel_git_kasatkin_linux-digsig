@@ -30,7 +30,7 @@ struct integrity_iint_cache {
 	struct mutex mutex;	/* protects: version, flags, digest */
 	struct mutex evm_mutex; /* protects: hmac_status, hmac */
 	enum integrity_status hmac_status;
-	u8 hmac[MAX_DIGEST_SIZE];
+	u8 hmac[MAX_DIGEST_SIZE + 1];
 };
 
 /* rbtree tree calls to lookup, insert, delete
