@@ -8,6 +8,7 @@
 #include <linux/fs.h>
 #include <linux/security.h>
 #include <linux/slab.h>
+#include <linux/evm.h>
 #include "ext4_jbd2.h"
 #include "ext4.h"
 #include "xattr.h"
@@ -53,20 +54,35 @@ ext4_init_security(handle_t *handle, struct inode *inode, struct inode *dir,
 		   const struct qstr *qstr)
 {
 	int err;
-	size_t len;
-	void *value;
-	char *name;
+	struct xattr lsm_xattr;
+	struct xattr evm_xattr;
 
-	err = security_inode_init_security(inode, dir, qstr, &name, &value, &len);
+	err = security_inode_init_security(inode, dir, qstr, &lsm_xattr.name,
+					   &lsm_xattr.value,
+					   &lsm_xattr.value_len);
 	if (err) {
 		if (err == -EOPNOTSUPP)
 			return 0;
 		return err;
 	}
 	err = ext4_xattr_set_handle(handle, inode, EXT4_XATTR_INDEX_SECURITY,
-				    name, value, len, 0);
-	kfree(name);
-	kfree(value);
+				    lsm_xattr.name, lsm_xattr.value,
+				    lsm_xattr.value_len, 0);
+	if (err < 0)
+		goto out;
+
+	err = evm_inode_post_init_security(inode, &lsm_xattr, &evm_xattr);
+	if (err)
+		goto out;
+	err = ext4_xattr_set_handle(handle, inode, EXT4_XATTR_INDEX_SECURITY,
+				    evm_xattr.name, evm_xattr.value,
+				    evm_xattr.value_len, 0);
+	kfree(evm_xattr.value);
+out:
+	kfree(lsm_xattr.name);
+	kfree(lsm_xattr.value);
+	if (err == -EOPNOTSUPP)
+		return 0;
 	return err;
 }
 
