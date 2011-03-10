@@ -27,7 +27,15 @@ __setup("ima_appraise=", default_appraise_setup);
  */
 int ima_must_appraise(struct inode *inode, enum ima_hooks func, int mask)
 {
-	return 0;
+	int must_appraise, rc = 0;
+
+	if (!ima_appraise || !inode->i_op->getxattr)
+		return 0;
+
+	must_appraise = ima_match_appraise_policy(inode, func, mask);
+	if (must_appraise)
+		rc = 1;
+	return rc;
 }
 
 static void ima_fix_xattr(struct dentry *dentry,
