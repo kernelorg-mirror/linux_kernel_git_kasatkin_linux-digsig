@@ -24,8 +24,11 @@
 #define IMA_MASK 	0x0002
 #define IMA_FSMAGIC	0x0004
 #define IMA_UID		0x0008
+#define IMA_FOWNER	0x0010
 
-enum ima_action { UNKNOWN = -1, DONT_MEASURE = 0, MEASURE };
+enum ima_action { UNKNOWN = -1,
+		  DONT_MEASURE = 0, MEASURE,
+		  DONT_APPRAISE, APPRAISE};
 
 #define MAX_LSM_RULES 6
 enum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,
@@ -40,6 +43,7 @@ struct ima_measure_rule_entry {
 	int mask;
 	unsigned long fsmagic;
 	uid_t uid;
+	uid_t fowner;
 	struct {
 		void *rule;	/* LSM file metadata specific */
 		int type;	/* audit type */
@@ -48,7 +52,7 @@ struct ima_measure_rule_entry {
 
 /*
  * Without LSM specific knowledge, the default policy can only be
- * written in terms of .action, .func, .mask, .fsmagic, and .uid
+ * written in terms of .action, .func, .mask, .fsmagic, .uid, and .fowner
  */
 
 /*
@@ -70,6 +74,13 @@ static struct ima_measure_rule_entry default_rules[] = {
 	 .flags = IMA_FUNC | IMA_MASK},
 	{.action = MEASURE,.func = FILE_CHECK,.mask = MAY_READ,.uid = 0,
 	 .flags = IMA_FUNC | IMA_MASK | IMA_UID},
+	{.action = DONT_APPRAISE,.fsmagic = PROC_SUPER_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = DONT_APPRAISE,.fsmagic = SYSFS_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = DONT_APPRAISE,.fsmagic = DEBUGFS_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = DONT_APPRAISE,.fsmagic = TMPFS_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = DONT_APPRAISE,.fsmagic = SECURITYFS_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = DONT_APPRAISE,.fsmagic = SELINUX_MAGIC,.flags = IMA_FSMAGIC},
+	{.action = APPRAISE,.fowner = 0,.flags = IMA_FOWNER},
 };
 
 static LIST_HEAD(measure_default_rules);
@@ -109,6 +120,8 @@ static bool ima_match_rules(struct ima_measure_rule_entry *rule,
 	    && rule->fsmagic != inode->i_sb->s_magic)
 		return false;
 	if ((rule->flags & IMA_UID) && rule->uid != tsk->cred->uid)
+		return false;
+	if ((rule->flags & IMA_FOWNER) && rule->fowner != inode->i_uid)
 		return false;
 	for (i = 0; i < MAX_LSM_RULES; i++) {
 		int rc = 0;
@@ -166,9 +179,34 @@ int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask)
 	list_for_each_entry(entry, ima_measure, list) {
 		bool rc;
 
+		if ((entry->action == APPRAISE) ||
+		    (entry->action == DONT_APPRAISE))
+			continue;
 		rc = ima_match_rules(entry, inode, func, mask);
 		if (rc)
 			return entry->action;
+	}
+	return 0;
+}
+
+int ima_match_appraise_policy(struct inode *inode, enum ima_hooks func,
+			      int mask)
+{
+	struct ima_measure_rule_entry *entry;
+
+	list_for_each_entry(entry, ima_measure, list) {
+		bool rc;
+
+		if ((entry->action == MEASURE) ||
+		    (entry->action == DONT_MEASURE))
+			continue;
+		rc = ima_match_rules(entry, inode, func, mask);
+		if (rc) {
+			if (entry->action == DONT_APPRAISE)
+				return 0;
+			if (entry->action == APPRAISE)
+				return 1;
+		}
 	}
 	return 0;
 }
@@ -220,6 +258,7 @@ void ima_update_policy(void)
 enum {
 	Opt_err = -1,
 	Opt_measure = 1, Opt_dont_measure,
+	Opt_appraise, Opt_dont_appraise,
 	Opt_obj_user, Opt_obj_role, Opt_obj_type,
 	Opt_subj_user, Opt_subj_role, Opt_subj_type,
 	Opt_func, Opt_mask, Opt_fsmagic, Opt_uid
@@ -228,6 +267,8 @@ enum {
 static match_table_t policy_tokens = {
 	{Opt_measure, "measure"},
 	{Opt_dont_measure, "dont_measure"},
+	{Opt_appraise, "appraise"},
+	{Opt_dont_appraise, "dont_appraise"},
 	{Opt_obj_user, "obj_user=%s"},
 	{Opt_obj_role, "obj_role=%s"},
 	{Opt_obj_type, "obj_type=%s"},
@@ -301,6 +342,22 @@ static int ima_parse_rule(char *rule, struct ima_measure_rule_entry *entry)
 				result = -EINVAL;
 
 			entry->action = DONT_MEASURE;
+			break;
+		case Opt_appraise:
+			ima_log_string(ab, "action", "appraise");
+
+			if (entry->action != UNKNOWN)
+				result = -EINVAL;
+
+			entry->action = APPRAISE;
+			break;
+		case Opt_dont_appraise:
+			ima_log_string(ab, "action", "dont_appraise");
+
+			if (entry->action != UNKNOWN)
+				result = -EINVAL;
+
+			entry->action = DONT_APPRAISE;
 			break;
 		case Opt_func:
 			ima_log_string(ab, "func", args[0].from);

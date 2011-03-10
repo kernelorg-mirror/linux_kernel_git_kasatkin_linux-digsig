@@ -121,6 +121,8 @@ struct integrity_iint_cache *integrity_iint_find(struct inode *inode);
 enum ima_hooks { FILE_CHECK = 1, FILE_MMAP, BPRM_CHECK, POST_SETATTR };
 
 int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask);
+int ima_match_appraise_policy(struct inode *inode, enum ima_hooks func,
+			      int mask);
 void ima_init_policy(void);
 void ima_update_policy(void);
 ssize_t ima_parse_add_rule(char *);
