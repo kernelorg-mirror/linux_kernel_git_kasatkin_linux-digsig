@@ -18,6 +18,7 @@ extern int ima_bprm_check(struct linux_binprm *bprm);
 extern int ima_file_check(struct file *file, int mask);
 extern void ima_file_free(struct file *file);
 extern int ima_file_mmap(struct file *file, unsigned long prot);
+extern void ima_inode_post_setattr(struct dentry *dentry);
 
 #else
 static inline int ima_bprm_check(struct linux_binprm *bprm)
@@ -39,5 +40,11 @@ static inline int ima_file_mmap(struct file *file, unsigned long prot)
 {
 	return 0;
 }
+
+static inline void ima_inode_post_setattr(struct dentry *dentry)
+{
+	return;
+}
+
 #endif /* CONFIG_IMA_H */
 #endif /* _LINUX_IMA_H */
