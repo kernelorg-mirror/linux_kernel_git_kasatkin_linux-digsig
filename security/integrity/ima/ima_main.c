@@ -22,10 +22,18 @@
 #include <linux/mount.h>
 #include <linux/mman.h>
 #include <linux/slab.h>
+#include <linux/xattr.h>
+#include <linux/ima.h>
 
 #include "ima.h"
 
 int ima_initialized;
+
+#ifdef CONFIG_IMA_APPRAISE
+int ima_appraise = IMA_APPRAISE_ENABLED | IMA_APPRAISE_ENFORCE;
+#else
+int ima_appraise;
+#endif
 
 char *ima_hash = "sha1";
 static int __init hash_setup(char *str)
@@ -65,7 +73,8 @@ static void ima_rdwr_violation_check(struct file *file)
 		goto out;
 	}
 
-	rc = ima_must_measure(inode, MAY_READ, FILE_CHECK);
+	rc = ima_must_appraise_or_measure(inode, MAY_READ, FILE_CHECK,
+					  NULL, NULL);
 	if (rc < 0)
 		goto out;
 
@@ -88,12 +97,15 @@ static void ima_check_last_writer(struct integrity_iint_cache *iint,
 {
 	mode_t mode = file->f_mode;
 
-	mutex_lock(&iint->mutex);
+	mutex_lock(&inode->i_mutex);
 	if (mode & FMODE_WRITE &&
 	    atomic_read(&inode->i_writecount) == 1 &&
-	    iint->version != inode->i_version)
-		iint->flags &= ~IMA_MEASURED;
-	mutex_unlock(&iint->mutex);
+	    iint->version != inode->i_version) {
+		iint->flags &= ~(IMA_COLLECTED | IMA_APPRAISED | IMA_MEASURED);
+		if (iint->flags & IMA_APPRAISE)
+			ima_update_xattr(iint, file);
+	}
+	mutex_unlock(&inode->i_mutex);
 }
 
 /**
@@ -122,14 +134,17 @@ static int process_measurement(struct file *file, const unsigned char *filename,
 {
 	struct inode *inode = file->f_dentry->d_inode;
 	struct integrity_iint_cache *iint;
-	int rc = 0;
+	int rc = 0, err = 0, must_measure, must_appraise;
 
 	if (!ima_initialized || !S_ISREG(inode->i_mode))
 		return 0;
 
-	rc = ima_must_measure(inode, mask, function);
-	if (rc != 0)
-		return rc;
+	/* Determine if in appraise/measurement policy */
+	rc = ima_must_appraise_or_measure(inode, mask, function,
+					  &must_measure, &must_appraise);
+	if (!must_measure && !must_appraise)
+		return 0;
+
 retry:
 	iint = integrity_iint_find(inode);
 	if (!iint) {
@@ -139,18 +154,33 @@ retry:
 		return rc;
 	}
 
-	mutex_lock(&iint->mutex);
+	mutex_lock(&inode->i_mutex);
 
-	rc = iint->flags & IMA_MEASURED ? 1 : 0;
-	if (rc != 0)
+	/* Determine if already appraised/measured */
+	if (must_measure) {
+		iint->flags |= IMA_MEASURE;
+		must_measure = iint->flags & IMA_MEASURED ? 0 : 1;
+	}
+	if (must_appraise) {
+		iint->flags |= IMA_APPRAISE;
+		must_appraise = iint->flags & IMA_APPRAISED ? 0 : 1;
+	}
+	if (!must_measure && !must_appraise) {
+		if (iint->flags & IMA_APPRAISED)
+			err = iint->hash_status;
 		goto out;
+	}
 
 	rc = ima_collect_measurement(iint, file);
-	if (!rc)
+	if (rc != 0)
+		goto out;
+	if (must_measure)
 		ima_store_measurement(iint, file, filename);
+	if (must_appraise)
+		err = ima_appraise_measurement(iint, file, filename);
 out:
-	mutex_unlock(&iint->mutex);
-	return rc;
+	mutex_unlock(&inode->i_mutex);
+	return (!err) ? 0 : -EACCES;
 }
 
 /**
@@ -166,14 +196,14 @@ out:
  */
 int ima_file_mmap(struct file *file, unsigned long prot)
 {
-	int rc;
+	int rc = 0;
 
 	if (!file)
 		return 0;
 	if (prot & PROT_EXEC)
 		rc = process_measurement(file, file->f_dentry->d_name.name,
 					 MAY_EXEC, FILE_MMAP);
-	return 0;
+	return (ima_appraise & IMA_APPRAISE_ENFORCE) ? rc : 0;
 }
 
 /**
@@ -195,7 +225,7 @@ int ima_bprm_check(struct linux_binprm *bprm)
 
 	rc = process_measurement(bprm->file, bprm->filename,
 				 MAY_EXEC, BPRM_CHECK);
-	return 0;
+	return (ima_appraise & IMA_APPRAISE_ENFORCE) ? rc : 0;
 }
 
 /**
@@ -216,9 +246,40 @@ int ima_file_check(struct file *file, int mask)
 	rc = process_measurement(file, file->f_dentry->d_name.name,
 				 mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
 				 FILE_CHECK);
-	return 0;
+	return (ima_appraise & IMA_APPRAISE_ENFORCE) ? rc : 0;
 }
 EXPORT_SYMBOL_GPL(ima_file_check);
+
+/**
+ * ima_inode_post_setattr - reflect file metadata changes
+ * @dentry: pointer to the affected dentry
+ *
+ * Changes to a dentry's metadata might result in needing to appraise.
+ *
+ * This function is called from notify_change(), which expects the caller
+ * to lock the inode's i_mutex.
+ */
+void ima_inode_post_setattr(struct dentry *dentry)
+{
+	struct inode *inode = dentry->d_inode;
+	struct integrity_iint_cache *iint;
+	int must_appraise, rc;
+
+	if (!ima_initialized || !ima_appraise || !S_ISREG(inode->i_mode)
+	    || !inode->i_op->removexattr)
+		return;
+
+	must_appraise = ima_must_appraise(inode, MAY_ACCESS, POST_SETATTR);
+	iint = integrity_iint_find(inode);
+	if (iint) {
+		iint->flags &= ~(IMA_APPRAISE | IMA_APPRAISED);
+		if (must_appraise)
+			iint->flags |= IMA_APPRAISE;
+	}
+	if (!must_appraise)
+		rc = inode->i_op->removexattr(dentry, XATTR_NAME_IMA);
+	return;
+}
 
 static int __init init_ima(void)
 {
