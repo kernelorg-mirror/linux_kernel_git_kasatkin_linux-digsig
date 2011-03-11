@@ -9,13 +9,18 @@
  * License.
  *
  * File: ima_api.c
- *	Implements must_measure, collect_measurement, store_measurement,
- *	and store_template.
+ *	Implements must_appraise_or_measure, collect_measurement,
+ *	appraise_measurement, store_measurement and store_template.
  */
 #include <linux/module.h>
 #include <linux/slab.h>
+#include <linux/file.h>
+#include <linux/fs.h>
+#include <linux/xattr.h>
+#include <linux/evm.h>
 
 #include "ima.h"
+
 static const char *IMA_TEMPLATE_NAME = "ima";
 
 /*
@@ -93,10 +98,12 @@ err_out:
 }
 
 /**
- * ima_must_measure - measure decision based on policy.
+ * ima_must_appraise_or_measure - appraise & measure decision based on policy.
  * @inode: pointer to inode to measure
  * @mask: contains the permission mask (MAY_READ, MAY_WRITE, MAY_EXECUTE)
  * @function: calling function (FILE_CHECK, BPRM_CHECK, FILE_MMAP)
+ * @must_measure: pointer to measure flag
+ * @must_appraise: pointer to appraise flag
  *
  * The policy is defined in terms of keypairs:
  * 		subj=, obj=, type=, func=, mask=, fsmagic=
@@ -105,15 +112,24 @@ err_out:
  * 	mask: contains the permission mask
  *	fsmagic: hex value
  *
- * Return 0 to measure. For matching a DONT_MEASURE policy, no policy,
- * or other error, return an error code.
+ * Set must_appraise to 1 to appraise measurement.
+ * Set must_measure to 1 to add to measurement list.
+ *
+ * For matching a DONT_MEASURE policy, no policy, or other error,
+ * return an error code, otherwise 0.
 */
-int ima_must_measure(struct inode *inode, int mask, int function)
+int ima_must_appraise_or_measure(struct inode *inode, int mask, int function,
+				 int *must_measure, int *must_appraise)
 {
-	int must_measure;
+	int rc;
 
-	must_measure = ima_match_policy(inode, function, mask);
-	return must_measure ? 0 : -EACCES;
+	if (must_appraise)
+		*must_appraise = ima_must_appraise(inode, function, mask);
+
+	rc = ima_match_policy(inode, function, mask);
+	if (must_measure)
+		*must_measure = rc ? 1 : 0;
+	return rc ? 0 : -EACCES;
 }
 
 /*
@@ -129,15 +145,17 @@ int ima_must_measure(struct inode *inode, int mask, int function)
 int ima_collect_measurement(struct integrity_iint_cache *iint,
 			    struct file *file)
 {
-	int result = -EEXIST;
+	int result = 0;
 
-	if (!(iint->flags & IMA_MEASURED)) {
+	if (!(iint->flags & IMA_COLLECTED)) {
 		u64 i_version = file->f_dentry->d_inode->i_version;
 
 		memset(iint->digest, 0, IMA_DIGEST_SIZE);
 		result = ima_calc_hash(file, iint->digest);
-		if (!result)
+		if (!result) {
 			iint->version = i_version;
+			iint->flags |= IMA_COLLECTED;
+		}
 	}
 	return result;
 }
@@ -166,6 +184,9 @@ void ima_store_measurement(struct integrity_iint_cache *iint,
 	struct inode *inode = file->f_dentry->d_inode;
 	struct ima_template_entry *entry;
 	int violation = 0;
+
+	if (iint->flags & IMA_MEASURED)
+		return;
 
 	entry = kmalloc(sizeof(*entry), GFP_KERNEL);
 	if (!entry) {

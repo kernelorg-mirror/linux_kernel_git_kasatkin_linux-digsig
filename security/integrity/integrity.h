@@ -16,7 +16,11 @@
 #include <crypto/sha.h>
 
 /* iint cache flags */
-#define IMA_MEASURED		0x01
+#define IMA_MEASURE		1
+#define IMA_MEASURED		2
+#define IMA_APPRAISE		4
+#define IMA_APPRAISED		8
+#define IMA_COLLECTED		16
 
 enum evm_ima_xattr_type {
 	IMA_XATTR_DIGEST = 0x01,
@@ -37,6 +41,7 @@ struct integrity_iint_cache {
 	unsigned char flags;
 	u8 digest[SHA1_DIGEST_SIZE];
 	struct mutex mutex;	/* protects: version, flags, digest */
+	enum integrity_status hash_status;
 	enum integrity_status evm_status;
 };
 
