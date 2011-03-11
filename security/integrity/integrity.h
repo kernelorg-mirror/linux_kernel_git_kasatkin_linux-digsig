@@ -18,7 +18,11 @@
 #define MAX_DIGEST_SIZE		SHA1_DIGEST_SIZE
 
 /* iint cache flags */
-#define IMA_MEASURED		0x01
+#define IMA_MEASURE		1
+#define IMA_MEASURED		2
+#define IMA_APPRAISE		4
+#define IMA_APPRAISED		8
+#define IMA_COLLECTED		16
 
 /* integrity data associated with an inode */
 struct integrity_iint_cache {
@@ -27,6 +31,7 @@ struct integrity_iint_cache {
 	u64 version;		/* track inode changes */
 	unsigned char flags;
 	u8 digest[MAX_DIGEST_SIZE];
+	enum integrity_status hash_status;
 	struct mutex mutex;	/* protects: version, flags, digest */
 	struct mutex evm_mutex; /* protects: hmac_status, hmac */
 	enum integrity_status hmac_status;

@@ -158,6 +158,7 @@ static void init_once(void *foo)
 	iint->flags = 0UL;
 	mutex_init(&iint->mutex);
 	mutex_init(&iint->evm_mutex);
+	iint->hash_status = INTEGRITY_UNKNOWN;
 	iint->hmac_status = INTEGRITY_UNKNOWN;
 }
 
