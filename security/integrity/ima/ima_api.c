@@ -150,8 +150,8 @@ int ima_collect_measurement(struct integrity_iint_cache *iint,
 	if (!(iint->flags & IMA_COLLECTED)) {
 		u64 i_version = file->f_dentry->d_inode->i_version;
 
-		memset(iint->digest, 0, IMA_DIGEST_SIZE);
-		result = ima_calc_hash(file, iint->digest);
+		iint->ima_xattr.type = IMA_XATTR_DIGEST;
+		result = ima_calc_hash(file, iint->ima_xattr.digest);
 		if (!result) {
 			iint->version = i_version;
 			iint->flags |= IMA_COLLECTED;
@@ -195,7 +195,8 @@ void ima_store_measurement(struct integrity_iint_cache *iint,
 		return;
 	}
 	memset(&entry->template, 0, sizeof(entry->template));
-	memcpy(entry->template.digest, iint->digest, IMA_DIGEST_SIZE);
+	memcpy(entry->template.digest, iint->ima_xattr.digest,
+	       IMA_DIGEST_SIZE);
 	strncpy(entry->template.file_name, filename, IMA_EVENT_NAME_LEN_MAX);
 
 	result = ima_store_template(entry, violation, inode);
