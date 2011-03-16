@@ -30,7 +30,7 @@ struct integrity_iint_cache {
 	struct inode *inode;	/* back pointer to inode in question */
 	u64 version;		/* track inode changes */
 	unsigned char flags;
-	u8 digest[MAX_DIGEST_SIZE];
+	u8 digest[MAX_DIGEST_SIZE + 1];
 	enum integrity_status hash_status;
 	struct mutex mutex;	/* protects: version, flags, digest */
 	struct mutex evm_mutex; /* protects: hmac_status, hmac */

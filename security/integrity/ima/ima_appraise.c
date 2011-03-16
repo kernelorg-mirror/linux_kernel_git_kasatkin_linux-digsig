@@ -35,9 +35,10 @@ static void ima_fix_xattr(struct dentry *dentry,
 {
 	struct inode *inode = dentry->d_inode;
 
+	iint->digest[0] = IMA_XATTR_DIGEST;
 	mutex_lock(&inode->i_mutex);
 	__vfs_setxattr_noperm(dentry, XATTR_NAME_IMA,
-			      iint->digest, IMA_DIGEST_SIZE, 0);
+			      iint->digest, IMA_DIGEST_SIZE + 1, 0);
 	mutex_unlock(&inode->i_mutex);
 }
 
@@ -54,7 +55,7 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 {
 	struct dentry *dentry = file->f_dentry;
 	struct inode *inode = dentry->d_inode;
-	u8 xattr_value[IMA_DIGEST_SIZE];
+	u8 xattr_value[IMA_DIGEST_SIZE + 1];
 	enum integrity_status status = INTEGRITY_UNKNOWN;
 	const char *op = "appraise_data";
 	char *cause = "unknown";
@@ -66,7 +67,7 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 		return iint->hash_status;
 
 	rc = inode->i_op->getxattr(dentry, XATTR_NAME_IMA, xattr_value,
-				   IMA_DIGEST_SIZE);
+				   IMA_DIGEST_SIZE + 1);
 	if (rc <= 0) {
 		if (rc && rc != -ENODATA)
 			goto out;
@@ -86,14 +87,14 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 		goto out;
 	}
 
-	rc = memcmp(xattr_value, iint->digest, IMA_DIGEST_SIZE);
+	rc = memcmp(xattr_value + 1, iint->digest + 1, IMA_DIGEST_SIZE);
 	if (rc) {
 		status = INTEGRITY_FAIL;
 		cause = "invalid-hash";
 		print_hex_dump_bytes("security.ima: ", DUMP_PREFIX_NONE,
-				     xattr_value, IMA_DIGEST_SIZE);
+				     xattr_value, IMA_DIGEST_SIZE + 1);
 		print_hex_dump_bytes("collected: ", DUMP_PREFIX_NONE,
-				     iint->digest, IMA_DIGEST_SIZE);
+				     iint->digest, IMA_DIGEST_SIZE + 1);
 		goto out;
 	}
 	status = INTEGRITY_PASS;
