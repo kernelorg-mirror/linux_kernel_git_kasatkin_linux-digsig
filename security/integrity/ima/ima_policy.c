@@ -261,7 +261,7 @@ enum {
 	Opt_appraise, Opt_dont_appraise,
 	Opt_obj_user, Opt_obj_role, Opt_obj_type,
 	Opt_subj_user, Opt_subj_role, Opt_subj_type,
-	Opt_func, Opt_mask, Opt_fsmagic, Opt_uid
+	Opt_func, Opt_mask, Opt_fsmagic, Opt_uid, Opt_fowner
 };
 
 static match_table_t policy_tokens = {
@@ -279,6 +279,7 @@ static match_table_t policy_tokens = {
 	{Opt_mask, "mask=%s"},
 	{Opt_fsmagic, "fsmagic=%s"},
 	{Opt_uid, "uid=%s"},
+	{Opt_fowner, "fowner=%s"},
 	{Opt_err, NULL}
 };
 
@@ -315,6 +316,7 @@ static int ima_parse_rule(char *rule, struct ima_measure_rule_entry *entry)
 	ab = audit_log_start(NULL, GFP_KERNEL, AUDIT_INTEGRITY_RULE);
 
 	entry->uid = -1;
+	entry->fowner = -1;
 	entry->action = UNKNOWN;
 	while ((p = strsep(&rule, " \t")) != NULL) {
 		substring_t args[MAX_OPT_ARGS];
@@ -363,7 +365,7 @@ static int ima_parse_rule(char *rule, struct ima_measure_rule_entry *entry)
 			ima_log_string(ab, "func", args[0].from);
 
 			if (entry->func)
-				result  = -EINVAL;
+				result = -EINVAL;
 
 			if (strcmp(args[0].from, "FILE_CHECK") == 0)
 				entry->func = FILE_CHECK;
@@ -426,6 +428,23 @@ static int ima_parse_rule(char *rule, struct ima_measure_rule_entry *entry)
 					result = -EINVAL;
 				else
 					entry->flags |= IMA_UID;
+			}
+			break;
+		case Opt_fowner:
+			ima_log_string(ab, "fowner", args[0].from);
+
+			if (entry->fowner != -1) {
+				result = -EINVAL;
+				break;
+			}
+
+			result = strict_strtoul(args[0].from, 10, &lnum);
+			if (!result) {
+				entry->fowner = (uid_t) lnum;
+				if (entry->fowner != lnum)
+					result = -EINVAL;
+				else
+					entry->flags |= IMA_FOWNER;
 			}
 			break;
 		case Opt_obj_user:
