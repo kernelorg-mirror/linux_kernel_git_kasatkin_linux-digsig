@@ -18,11 +18,14 @@
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include <linux/err.h>
+#include <linux/init_task.h>
 #include "ima.h"
 
 /* name for boot aggregate entry */
 static const char *boot_aggregate_name = "boot_aggregate";
 int ima_used_chip;
+
+struct key *ima_keyring;
 
 /* Add the boot aggregate to the IMA measurement list and extend
  * the PCR register.
@@ -88,10 +91,20 @@ int __init ima_init(void)
 	ima_add_boot_aggregate();	/* boot aggregate must be first entry */
 	ima_init_policy();
 
+#ifdef CONFIG_IMA_APPRAISE_DIGSIG
+	ima_keyring = keyring_alloc("_ima", 0, 0, &init_cred,
+					KEY_ALLOC_NOT_IN_QUOTA, NULL);
+	if (IS_ERR(ima_keyring))
+		return PTR_ERR(ima_keyring);
+#endif
+
 	return ima_fs_init();
 }
 
 void __exit ima_cleanup(void)
 {
+#ifdef CONFIG_IMA_APPRAISE_DIGSIG
+	key_put(ima_keyring);
+#endif
 	ima_fs_cleanup();
 }

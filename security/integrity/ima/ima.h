@@ -46,6 +46,8 @@ extern char *ima_hash;
 extern int ima_appraise;
 extern int ima_module_checks_enabled;
 
+extern struct key *ima_keyring;
+
 /* IMA inode template definition */
 struct ima_template_data {
 	u8 digest[IMA_DIGEST_SIZE];	/* sha1/md5 measurement hash */
@@ -192,7 +194,7 @@ static inline int security_filter_rule_match(u32 secid, u32 field, u32 op,
 static inline int ima_sign_verify(const char *sig, int siglen,
 		       const char *digest, int digestlen)
 {
-	return ksign_verify(NULL, sig, siglen, digest, digestlen);
+	return ksign_verify(ima_keyring, sig, siglen, digest, digestlen);
 }
 
 #else
