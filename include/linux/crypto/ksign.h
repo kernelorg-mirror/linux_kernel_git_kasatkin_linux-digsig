@@ -32,12 +32,12 @@ struct signature_hdr {
 
 #ifdef CONFIG_CRYPTO_KSIGN
 
-int ksign_verify(const char *sig, int siglen,
+int ksign_verify(struct key *keyring, const char *sig, int siglen,
 		 const char *digest, int digestlen);
 
 #else
 
-static inline int ksign_verify(const char *sig, int siglen,
+static inline int ksign_verify(struct key *keyring, const char *sig, int siglen,
 		 const char *digest, int digestlen)
 {
 	return -EOPNOTSUPP;

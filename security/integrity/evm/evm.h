@@ -53,7 +53,7 @@ extern void evm_cleanup_secfs(void);
 static inline int evm_sign_verify(const char *sig, int siglen,
 		       const char *digest, int digestlen)
 {
-	return ksign_verify(sig, siglen, digest, digestlen);
+	return ksign_verify(NULL, sig, siglen, digest, digestlen);
 }
 
 #else

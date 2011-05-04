@@ -183,7 +183,7 @@ err1:
 /*
  * Signature verification with public key
  */
-int ksign_verify(const char *sig, int siglen,
+int ksign_verify(struct key *keyring, const char *sig, int siglen,
 		       const char *digest, int digestlen)
 {
 	int err = -ENOMEM;
@@ -201,10 +201,21 @@ int ksign_verify(const char *sig, int siglen,
 
 	sprintf(name, "%llX", __be64_to_cpup((uint64_t *)sh->keyid));
 
-	key = request_key(&key_type_user, name, NULL);
+	if (keyring) {
+		/* search in specific keyring */
+		key_ref_t kref;
+		kref = keyring_search(make_key_ref(keyring, 1UL),
+						&key_type_user, name);
+		if (IS_ERR(kref))
+			key = ERR_PTR(PTR_ERR(kref));
+		else
+			key = key_ref_to_ptr(kref);
+	} else {
+		key = request_key(&key_type_user, name, NULL);
+	}
 	if (IS_ERR(key)) {
 		pr_err("key not found, id: %s\n", name);
-		return -ENOENT;
+		return PTR_ERR(key);
 	}
 
 	desc = kzalloc(sizeof(*desc) + crypto_shash_descsize(shash),
