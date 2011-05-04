@@ -20,6 +20,7 @@
 #include <linux/integrity.h>
 #include <linux/evm.h>
 #include <crypto/hash.h>
+#include <linux/init_task.h>
 #include "evm.h"
 
 int evm_initialized;
@@ -40,6 +41,8 @@ char *evm_config_xattrnames[] = {
 	XATTR_NAME_CAPS,
 	NULL
 };
+
+struct key *evm_keyring;
 
 static int evm_fixmode;
 static int __init evm_set_fixmode(char *str)
@@ -385,18 +388,33 @@ static int __init init_evm(void)
 {
 	int error;
 
+#ifdef CONFIG_EVM_DIGSIG
+	evm_keyring = keyring_alloc("_evm", 0, 0, &init_cred,
+					KEY_ALLOC_NOT_IN_QUOTA, NULL);
+	if (IS_ERR(evm_keyring))
+		return PTR_ERR(evm_keyring);
+#endif
+
 	error = evm_init_secfs();
 	if (error < 0) {
 		printk(KERN_INFO "EVM: Error registering secfs\n");
 		goto err;
 	}
+
+	return 0;
 err:
+#ifdef CONFIG_EVM_DIGSIG
+	key_put(evm_keyring);
+#endif
 	return error;
 }
 
 static void __exit cleanup_evm(void)
 {
 	evm_cleanup_secfs();
+#ifdef CONFIG_EVM_DIGSIG
+	key_put(evm_keyring);
+#endif
 	if (hmac_tfm)
 		crypto_free_shash(hmac_tfm);
 	if (hash_tfm)

@@ -32,6 +32,8 @@ extern struct crypto_shash *hash_tfm;
 /* List of EVM protected security xattrs */
 extern char *evm_config_xattrnames[];
 
+extern struct key *evm_keyring;
+
 extern int evm_init_key(void);
 extern int evm_update_evmxattr(struct dentry *dentry,
 			       const char *req_xattr_name,
@@ -53,7 +55,7 @@ extern void evm_cleanup_secfs(void);
 static inline int evm_sign_verify(const char *sig, int siglen,
 		       const char *digest, int digestlen)
 {
-	return ksign_verify(NULL, sig, siglen, digest, digestlen);
+	return ksign_verify(evm_keyring, sig, siglen, digest, digestlen);
 }
 
 #else
