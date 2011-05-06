@@ -78,7 +78,7 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 	if (!ima_appraise || !inode->i_op->getxattr)
 		return 0;
 	if (iint->flags & IMA_APPRAISED)
-		return iint->hash_status;
+		return iint->ima_status;
 
 	rc = inode->i_op->getxattr(dentry, XATTR_NAME_IMA, (u8 *)&xattr_value,
 				   sizeof xattr_value);
@@ -125,7 +125,7 @@ out:
 		integrity_audit_msg(AUDIT_INTEGRITY_DATA, inode, filename,
 				    op, cause, 1, 0);
 	}
-	iint->hash_status = status;
+	iint->ima_status = status;
 	return status;
 }
 
