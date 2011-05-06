@@ -41,7 +41,7 @@ struct integrity_iint_cache {
 	unsigned char flags;
 	struct evm_ima_xattr_data ima_xattr;
 	struct mutex mutex;	/* protects: version, flags, digest */
-	enum integrity_status hash_status;
+	enum integrity_status ima_status;
 	enum integrity_status evm_status;
 };
 

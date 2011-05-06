@@ -156,7 +156,7 @@ static void init_once(void *foo)
 	memset(iint, 0, sizeof *iint);
 	iint->version = 0;
 	iint->flags = 0UL;
-	iint->hash_status = INTEGRITY_UNKNOWN;
+	iint->ima_status = INTEGRITY_UNKNOWN;
 	iint->evm_status = INTEGRITY_UNKNOWN;
 }
 

@@ -167,7 +167,7 @@ retry:
 	}
 	if (!must_measure && !must_appraise) {
 		if (iint->flags & IMA_APPRAISED)
-			err = iint->hash_status;
+			err = iint->ima_status;
 		goto out;
 	}
 
