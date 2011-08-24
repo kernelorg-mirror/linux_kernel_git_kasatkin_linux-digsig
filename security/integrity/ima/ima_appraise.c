@@ -95,7 +95,8 @@ int ima_appraise_measurement(struct integrity_iint_cache *iint,
 	status = evm_verifyxattr(dentry, XATTR_NAME_IMA, (u8 *)&xattr_value,
 				 rc, iint);
 	if ((status != INTEGRITY_PASS) && (status != INTEGRITY_UNKNOWN)) {
-		if (status == INTEGRITY_NOLABEL)
+		if ((status == INTEGRITY_NOLABEL)
+		    || (status == INTEGRITY_NOXATTRS))
 			cause = "missing-HMAC";
 		else if (status == INTEGRITY_FAIL)
 			cause = "invalid-HMAC";
