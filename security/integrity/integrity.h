@@ -21,6 +21,7 @@
 #define IMA_APPRAISE		4
 #define IMA_APPRAISED		8
 #define IMA_COLLECTED		16
+#define IMA_DIGSIG		32
 
 enum evm_ima_xattr_type {
 	IMA_XATTR_DIGEST = 0x01,
