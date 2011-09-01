@@ -11,3 +11,18 @@ config EVM
 	  integrity attacks.
 
 	  If you are unsure how to answer this question, answer N.
+
+config EVM_DIGSIG
+	boolean "EVM Digital Signature support"
+	depends on EVM
+	default n
+	select INTEGRITY_DIGSIG
+	help
+	  This option enables digital signature verification support for EVM.
+	  With this feature file metadata can be protected using digital
+	  signature instead of HMAC. When building an image,
+	  which has to be flashed to different devices, an HMAC cannot
+	  be used to sign file metadata, because the HMAC key is different on
+	  every device. File metadata can be protected using digital signature.
+
+	  If unsure, say N.
