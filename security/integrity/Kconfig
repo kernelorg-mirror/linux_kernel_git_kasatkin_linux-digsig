@@ -3,5 +3,15 @@ config INTEGRITY
 	def_bool y
 	depends on IMA || EVM
 
+config INTEGRITY_DIGSIG
+	boolean "Integrity keyrings support"
+	depends on INTEGRITY
+	default n
+	select CRYPTO_KSIGN_RSA
+	help
+	  This option enables digital signature verification support
+	  using multiple keyrings. It is used by IMA and EVM digital
+	  signature extensions.
+
 source security/integrity/ima/Kconfig
 source security/integrity/evm/Kconfig
