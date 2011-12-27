@@ -27,6 +27,7 @@
 #include <linux/slab.h>
 #include <linux/shm.h>
 #include <linux/personality.h>
+#include <linux/ima.h>
 #include <linux/init.h>
 
 #include <asm/uaccess.h>
@@ -147,6 +148,11 @@ static int map_som_binary(struct file *file,
 	code_size = SOM_PAGEALIGN(hpuxhdr->exec_tsize);
 	current->mm->start_code = code_start;
 	current->mm->end_code = code_start + code_size;
+
+	retval = ima_file_mmap(file, prot);
+	if (retval < 0)
+		goto out;
+
 	down_write(&current->mm->mmap_sem);
 	retval = do_mmap(file, code_start, code_size, prot,
 			flags, SOM_PAGESTART(hpuxhdr->exec_tfile));

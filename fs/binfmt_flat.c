@@ -32,6 +32,7 @@
 #include <linux/slab.h>
 #include <linux/binfmts.h>
 #include <linux/personality.h>
+#include <linux/ima.h>
 #include <linux/init.h>
 #include <linux/flat.h>
 #include <linux/syscalls.h>
@@ -542,6 +543,11 @@ static int load_flat_file(struct linux_binprm * bprm,
 		 * really care
 		 */
 		DBG_FLT("BINFMT_FLAT: ROM mapping of file (we hope)\n");
+
+		ret = ima_file_mmap(bprm->file,
+				    PROT_READ | PROT_WRITE | PROT_EXEC);
+		if (ret < 0)
+			goto err;
 
 		down_write(&current->mm->mmap_sem);
 		textpos = do_mmap(bprm->file, 0, text_len, PROT_READ|PROT_EXEC,

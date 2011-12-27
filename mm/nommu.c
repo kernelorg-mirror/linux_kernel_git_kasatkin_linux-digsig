@@ -27,6 +27,7 @@
 #include <linux/mount.h>
 #include <linux/personality.h>
 #include <linux/security.h>
+#include <linux/ima.h>
 #include <linux/syscalls.h>
 #include <linux/audit.h>
 
@@ -1486,10 +1487,15 @@ SYSCALL_DEFINE6(mmap_pgoff, unsigned long, addr, unsigned long, len,
 
 	flags &= ~(MAP_EXECUTABLE | MAP_DENYWRITE);
 
+	retval = ima_file_mmap(file, prot);
+	if (retval < 0)
+		goto err_out;
+
 	down_write(&current->mm->mmap_sem);
 	retval = do_mmap_pgoff(file, addr, len, prot, flags, pgoff);
 	up_write(&current->mm->mmap_sem);
 
+err_out:
 	if (file)
 		fput(file);
 out:

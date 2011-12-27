@@ -28,6 +28,7 @@
 #include <linux/highmem.h>
 #include <linux/pagemap.h>
 #include <linux/security.h>
+#include <linux/ima.h>
 #include <linux/random.h>
 #include <linux/elf.h>
 #include <linux/utsname.h>
@@ -322,6 +323,7 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 	unsigned long map_addr;
 	unsigned long size = eppnt->p_filesz + ELF_PAGEOFFSET(eppnt->p_vaddr);
 	unsigned long off = eppnt->p_offset - ELF_PAGEOFFSET(eppnt->p_vaddr);
+	unsigned long ret;
 	addr = ELF_PAGESTART(addr);
 	size = ELF_PAGEALIGN(size);
 
@@ -329,6 +331,10 @@ static unsigned long elf_map(struct file *filep, unsigned long addr,
 	 * segment with zero filesize is perfectly valid */
 	if (!size)
 		return addr;
+
+	ret = ima_file_mmap(filep, prot);
+	if (ret < 0)
+		return ret;
 
 	down_write(&current->mm->mmap_sem);
 	/*
@@ -1049,6 +1055,10 @@ static int load_elf_library(struct file *file)
 
 	while (eppnt->p_type != PT_LOAD)
 		eppnt++;
+
+	error = ima_file_mmap(file, PROT_READ | PROT_WRITE | PROT_EXEC);
+	if (error < 0)
+		goto out_free_ph;
 
 	/* Now use mmap to map the library into memory. */
 	down_write(&current->mm->mmap_sem);

@@ -25,6 +25,7 @@
 #include <linux/personality.h>
 #include <linux/init.h>
 #include <linux/jiffies.h>
+#include <linux/ima.h>
 
 #include <asm/system.h>
 #include <asm/uaccess.h>
@@ -380,6 +381,13 @@ static int load_aout_binary(struct linux_binprm *bprm, struct pt_regs *regs)
 			goto beyond_if;
 		}
 
+		error = ima_file_mmap(bprm->file,
+				      PROT_READ | PROT_WRITE | PROT_EXEC);
+		if (error < 0) {
+			send_sig(SIGKILL, current, 0);
+			return error;
+		}
+
 		down_write(&current->mm->mmap_sem);
 		error = do_mmap(bprm->file, N_TXTADDR(ex), ex.a_text,
 				PROT_READ | PROT_EXEC,
@@ -491,6 +499,10 @@ static int load_aout_library(struct file *file)
 		retval = 0;
 		goto out;
 	}
+	error = ima_file_mmap(file, PROT_READ | PROT_WRITE | PROT_EXEC);
+	if (error < 0)
+		goto out;
+
 	/* Now use mmap to map the library into memory. */
 	down_write(&current->mm->mmap_sem);
 	error = do_mmap(file, start_addr, ex.a_text + ex.a_data,

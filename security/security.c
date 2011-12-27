@@ -661,12 +661,7 @@ int security_file_mmap(struct file *file, unsigned long reqprot,
 			unsigned long prot, unsigned long flags,
 			unsigned long addr, unsigned long addr_only)
 {
-	int ret;
-
-	ret = security_ops->file_mmap(file, reqprot, prot, flags, addr, addr_only);
-	if (ret)
-		return ret;
-	return ima_file_mmap(file, prot);
+	return security_ops->file_mmap(file, reqprot, prot, flags, addr, addr_only);
 }
 
 int security_file_mprotect(struct vm_area_struct *vma, unsigned long reqprot,
