@@ -223,3 +223,47 @@ int ima_inode_removexattr(struct dentry *dentry, const char *xattr_name)
 	}
 	return result;
 }
+
+struct wq_info {
+	struct file *file;
+	struct work_struct work;
+};
+
+static void ima_delayed_fput(struct work_struct *work)
+{
+	struct wq_info *info = container_of(work, struct wq_info, work);
+
+	fput(info->file);
+	kfree(info);
+}
+
+/**
+ * ima_delay_fput - delay calling __fput() for mmaped files
+ * @file: pointer to file structure to be freed
+ *
+ * The i_mutex is taken by ima_file_free(), called on  __fput(), to
+ * update 'security.ima' to reflect the current file data hash.  When
+ * a file is closed before it is munmapped, __fput() is called with
+ * the mmap_sem taken, resulting in an mmap_sem/i_mutex lockdep.
+ * This function delays calling __fput() until after the mmap_sem is
+ * released.
+ */
+void ima_delay_fput(struct file *file)
+{
+	struct dentry *dentry = file->f_path.dentry;
+	struct inode *inode = dentry->d_inode;
+	struct wq_info *info;
+
+	if (!IS_IMA(inode))
+		return;
+
+	info = kmalloc(sizeof(struct wq_info), GFP_KERNEL);
+	if (!info)
+		return;
+
+	get_file(file);
+
+	info->file = file;
+	INIT_WORK(&info->work, ima_delayed_fput);
+	schedule_work(&info->work);
+}
