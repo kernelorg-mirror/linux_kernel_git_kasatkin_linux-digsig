@@ -76,3 +76,13 @@ static inline void md_run_setup(void) {}
 #endif
 
 char * __init unpack_to_rootfs(char *buf, unsigned len);
+
+#ifdef CONFIG_INITRAMFS_SIG
+
+int __init initramfs_sig_load(void);
+
+#else
+
+static inline int initramfs_sig_load(void) { return 0; }
+
+#endif

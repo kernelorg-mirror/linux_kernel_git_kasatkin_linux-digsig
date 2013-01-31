@@ -81,6 +81,8 @@
 #include <asm/smp.h>
 #endif
 
+#include "do_mounts.h"
+
 static int kernel_init(void *);
 
 extern void init_IRQ(void);
@@ -894,6 +896,8 @@ static noinline void __init kernel_init_freeable(void)
 		ramdisk_execute_command = NULL;
 		prepare_namespace();
 	}
+
+	initramfs_sig_load();
 
 	/*
 	 * Ok, we have completed the initial bootup, and
