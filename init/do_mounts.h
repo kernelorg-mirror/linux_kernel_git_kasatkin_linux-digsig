@@ -74,3 +74,5 @@ void md_run_setup(void);
 static inline void md_run_setup(void) {}
 
 #endif
+
+char * __init unpack_to_rootfs(char *buf, unsigned len);

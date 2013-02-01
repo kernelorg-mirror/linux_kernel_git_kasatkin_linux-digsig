@@ -421,7 +421,7 @@ static unsigned my_inptr;   /* index of next byte to be processed in inbuf */
 
 #include <linux/decompress/generic.h>
 
-static char * __init unpack_to_rootfs(char *buf, unsigned len)
+char * __init unpack_to_rootfs(char *buf, unsigned len)
 {
 	int written, res;
 	decompress_fn decompress;
