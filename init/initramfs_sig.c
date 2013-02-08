@@ -88,7 +88,7 @@ static int __init load_image(const char *from)
 	if (err)
 		goto out;
 
-	err = sys_mount("tpmfs", (char *)secmnt, "tmpfs", MS_SILENT, NULL);
+	err = sys_mount("ramfs", (char *)secmnt, "ramfs", MS_SILENT, NULL);
 	if (err) {
 		pr_err("sys_mount() = %d\n", err);
 		goto out;
