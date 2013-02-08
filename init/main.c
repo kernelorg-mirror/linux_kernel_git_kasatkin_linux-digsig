@@ -784,7 +784,9 @@ static void __init do_basic_setup(void)
 	driver_init();
 	init_irq_proc();
 	do_ctors();
+#ifndef CONFIG_INITRAMFS_SIG
 	usermodehelper_enable();
+#endif
 	do_initcalls();
 }
 

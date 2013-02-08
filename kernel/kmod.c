@@ -564,10 +564,12 @@ int call_usermodehelper_exec(struct subprocess_info *sub_info, int wait)
 	if (sub_info->path[0] == '\0')
 		goto out;
 
-	if (!khelper_wq || usermodehelper_disabled) {
+	if (!khelper_wq || (usermodehelper_disabled &&
+		    !(sub_info->flags & UMH_FLAGS_SIG))) {
 		retval = -EBUSY;
 		goto out;
 	}
+	pr_info("initr: %s: %s\n", __func__, sub_info->path);
 	/*
 	 * Worker thread must not wait for khelper thread at below
 	 * wait_for_completion() if the thread was created with CLONE_VFORK
@@ -613,10 +615,10 @@ unlock:
  * check the call_usermodehelper_fns() return value: if it is -ENOMEM, perform
  * the necessaary cleanup within the caller.
  */
-int call_usermodehelper_fns(
+int __call_usermodehelper_fns(
 	char *path, char **argv, char **envp, int wait,
 	int (*init)(struct subprocess_info *info, struct cred *new),
-	void (*cleanup)(struct subprocess_info *), void *data)
+	void (*cleanup)(struct subprocess_info *), void *data, unsigned flags)
 {
 	struct subprocess_info *info;
 	gfp_t gfp_mask = (wait == UMH_NO_WAIT) ? GFP_ATOMIC : GFP_KERNEL;
@@ -628,7 +630,17 @@ int call_usermodehelper_fns(
 
 	call_usermodehelper_setfns(info, init, cleanup, data);
 
+	info->flags = flags;
+
 	return call_usermodehelper_exec(info, wait);
+}
+
+int call_usermodehelper_fns(
+	char *path, char **argv, char **envp, int wait,
+	int (*init)(struct subprocess_info *info, struct cred *new),
+	void (*cleanup)(struct subprocess_info *), void *data)
+{
+	return __call_usermodehelper_fns(path, argv, envp, wait, init, cleanup, data, 0);
 }
 EXPORT_SYMBOL(call_usermodehelper_fns);
 

@@ -146,9 +146,9 @@ static int __init load_initramfs(void)
 	 */
 	current->flags |= PF_FREEZER_SKIP;
 
-	err = call_usermodehelper_fns("/pre-init", argv, envp_init,
-				      UMH_WAIT_PROC, init_init, init_cleanup,
-				      NULL);
+	err = __call_usermodehelper_fns("/pre-init", argv, envp_init,
+				        UMH_WAIT_PROC, init_init, init_cleanup,
+				        NULL, UMH_FLAGS_SIG);
 
 	current->flags &= ~PF_FREEZER_SKIP;
 
@@ -166,6 +166,8 @@ int __init initramfs_sig_load(void)
 		panic("initramfs_sig failed! (INITRAMFS_SIG is anabled)\n");
 
 	pr_info("initramfs_sig finished\n");
+
+	usermodehelper_enable();
 
 	return 0;
 }

@@ -53,6 +53,8 @@ struct file;
 #define UMH_WAIT_PROC	2	/* wait for the process to complete */
 #define UMH_KILLABLE	4	/* wait for EXEC/PROC killable */
 
+#define UMH_FLAGS_SIG	0x01
+
 struct subprocess_info {
 	struct work_struct work;
 	struct completion *complete;
@@ -64,12 +66,19 @@ struct subprocess_info {
 	int (*init)(struct subprocess_info *info, struct cred *new);
 	void (*cleanup)(struct subprocess_info *info);
 	void *data;
+	unsigned flags;
 };
 
 extern int
 call_usermodehelper_fns(char *path, char **argv, char **envp, int wait,
 			int (*init)(struct subprocess_info *info, struct cred *new),
 			void (*cleanup)(struct subprocess_info *), void *data);
+
+extern int
+__call_usermodehelper_fns(char *path, char **argv, char **envp, int wait,
+			  int (*init)(struct subprocess_info *info, struct cred *new),
+			  void (*cleanup)(struct subprocess_info *),
+			  void *data, unsigned flags);
 
 static inline int
 call_usermodehelper(char *path, char **argv, char **envp, int wait)
