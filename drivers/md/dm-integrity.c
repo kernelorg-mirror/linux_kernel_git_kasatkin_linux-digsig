@@ -131,6 +131,13 @@ struct dm_int {
 
 #define io_block(io) (io->sector >> (io->dmi->data_block_bits - SECTOR_SHIFT))
 
+struct dm_int_prefetch_work {
+	struct work_struct work;
+	struct dm_int *dmi;
+	sector_t sector;
+	unsigned bi_size;
+};
+
 static void dm_int_queue_hmac(struct dm_int_io *io);
 
 /*
@@ -226,14 +233,16 @@ static void dm_int_io_put(struct dm_int_io *io)
 	bio_endio(bio, err);	/* finally completed, end main bio */
 }
 
-static void dm_int_prefetch(struct dm_int_io *io)
+static void dm_int_prefetch(struct work_struct *work)
 {
-	struct dm_int *dmi = io->dmi;
+	struct dm_int_prefetch_work *pw =
+		container_of(work, struct dm_int_prefetch_work, work);
+	struct dm_int *dmi = pw->dmi;
 	sector_t first, last, data;
 	loff_t offset;
 
 	/* block number to read */
-	offset = io->sector << SECTOR_SHIFT;
+	offset = pw->sector << SECTOR_SHIFT;
 	data = offset >> dmi->data_block_bits;
 	if (dmi->hmac_block_shift)
 		first = data >> dmi->hmac_block_shift;
@@ -243,7 +252,7 @@ static void dm_int_prefetch(struct dm_int_io *io)
 	}
 
 	/* offset to the last byte of data */
-	offset += (io->bi_size - 1);
+	offset += (pw->bi_size - 1);
 	data = offset >> dmi->data_block_bits;
 	if (dmi->hmac_block_shift)
 		last = data >> dmi->hmac_block_shift;
@@ -260,6 +269,25 @@ static void dm_int_prefetch(struct dm_int_io *io)
 		last = dmi->hmac_count;
 
 	dm_bufio_prefetch(dmi->bufio, dmi->hmac_start + first, last - first);
+
+	kfree(pw);
+}
+
+static void dm_int_submit_prefetch(struct dm_int_io *io)
+{
+	struct dm_int_prefetch_work *pw;
+
+	pw = kmalloc(sizeof(struct dm_int_prefetch_work),
+		GFP_NOIO | __GFP_NORETRY | __GFP_NOMEMALLOC | __GFP_NOWARN);
+
+	if (!pw)
+		return;
+
+	INIT_WORK(&pw->work, dm_int_prefetch);
+	pw->dmi = io->dmi;
+	pw->sector = io->sector;
+	pw->bi_size = io->bi_size;
+	queue_work(io->dmi->io_queue, &pw->work);
 }
 
 static int dm_int_verify_hmac(struct dm_int_io *io, loff_t offset,
@@ -588,7 +616,7 @@ static int dm_int_map(struct dm_target *ti, struct bio *bio)
 		 current->comm, current->pid);
 
 	dm_int_start_io(io);
-	dm_int_prefetch(io);
+	dm_int_submit_prefetch(io);
 
 	dm_int_io_put(io);
 
