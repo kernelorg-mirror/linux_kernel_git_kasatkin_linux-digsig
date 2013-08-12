@@ -1017,6 +1017,9 @@ const char *get_link(struct nameidata *nd)
 			return res;
 		}
 	}
+	error = ima_link_check(dentry, res);
+	if (unlikely(error))
+		return ERR_PTR(error);
 	if (*res == '/') {
 		if (nd->flags & LOOKUP_RCU) {
 			struct dentry *d;
@@ -4546,7 +4549,9 @@ int generic_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 		if (IS_ERR(link))
 			return PTR_ERR(link);
 	}
-	res = readlink_copy(buffer, buflen, link);
+	res = ima_link_check(dentry, link);
+	if (!res)
+		res = readlink_copy(buffer, buflen, link);
 	if (inode->i_op->put_link)
 		inode->i_op->put_link(inode, cookie);
 	return res;
