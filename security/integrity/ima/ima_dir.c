@@ -129,11 +129,12 @@ int static ima_calc_dir_hash(struct path *path, struct file *file,
 
 static int ima_dir_collect(struct integrity_iint_cache *iint,
 			  struct path *path, struct file *file,
-			  enum hash_algo algo)
+			  enum hash_algo algo, const char *link)
 {
 	struct dentry *dentry = path->dentry;
 	struct inode *inode = dentry->d_inode;
 	int rc = -EINVAL;
+	u32 dev;
 	struct {
 		struct ima_digest_data hdr;
 		char digest[IMA_MAX_DIGEST_SIZE];
@@ -148,6 +149,14 @@ static int ima_dir_collect(struct integrity_iint_cache *iint,
 	switch (inode->i_mode & S_IFMT) {
 	case S_IFDIR:
 		rc = ima_calc_dir_hash(path, file, &hash.hdr);
+		break;
+	case S_IFIFO: case S_IFSOCK:
+	case S_IFCHR: case S_IFBLK:
+		dev = new_encode_dev(inode->i_rdev);
+		rc = ima_calc_buffer_hash(&dev, sizeof(dev), &hash.hdr);
+		break;
+	case S_IFLNK:
+		rc = ima_calc_buffer_hash(link, strlen(link), &hash.hdr);
 		break;
 	default:
 		pr_debug("UKNOWN: dentry: %s, 0%o\n",
@@ -174,14 +183,16 @@ static int ima_dir_collect(struct integrity_iint_cache *iint,
 	return rc;
 }
 
-static int dir_measurement(struct path *path, struct file *file, int mask)
+static int dir_measurement(struct path *path, struct file *file, int mask,
+			   const char *link)
 {
 	struct dentry *dentry = path->dentry;
 	struct inode *inode = dentry->d_inode;
 	struct integrity_iint_cache *iint;
 	char *pathbuf = NULL;
 	const char *pathname;
-	int rc = 0, action, xattr_len = 0, func = DIR_CHECK;
+	int rc = 0, action, xattr_len = 0;
+	int func = S_ISDIR(inode->i_mode) ? DIR_CHECK : SPECIAL_CHECK;
 	struct evm_ima_xattr_data *xattr_value = NULL;
 	enum hash_algo algo;
 	int permit;
@@ -206,9 +217,10 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 
 		mutex_lock(&inode->i_mutex);
 	} else {
+		int func = S_ISDIR(inode->i_mode) ? DIR_CHECK : SPECIAL_CHECK;
 		/* Determine if in appraise/measurement policy,
 		* returns IMA_MEASURE, IMA_APPRAISE bitmask.  */
-		action = ima_must_appraise(dentry, mask, DIR_CHECK);
+		action = ima_must_appraise(dentry, mask, func);
 		if (!action)
 			return 0;
 
@@ -240,7 +252,7 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 	xattr_len = ima_read_xattr(dentry, &xattr_value);
 	algo = ima_get_hash_algo(xattr_value, xattr_len);
 
-	rc = ima_dir_collect(iint, path, file, algo);
+	rc = ima_dir_collect(iint, path, file, algo, link);
 	if (rc)
 		goto out_locked;
 
@@ -267,21 +279,17 @@ int ima_dir_check(struct path *dir, int mask)
 {
 	BUG_ON(!S_ISDIR(dir->dentry->d_inode->i_mode));
 
-	return dir_measurement(dir, NULL, mask);
+	return dir_measurement(dir, NULL, mask, NULL);
 }
 EXPORT_SYMBOL_GPL(ima_dir_check);
 
 int ima_special_check(struct file *file, int mask)
 {
-	struct inode *inode = d_backing_inode(file->f_path.dentry);
-
-	if (!S_ISDIR(inode->i_mode))
-		return 0;
-	return dir_measurement(&file->f_path, file, mask);
+	return dir_measurement(&file->f_path, file, mask, NULL);
 }
 
 static void ima_dir_update_xattr(struct integrity_iint_cache *iint,
-				 struct path *path)
+				 struct path *path, const char *link)
 {
 	struct dentry *dentry = path->dentry;
 	struct inode *inode = NULL;
@@ -289,12 +297,13 @@ static void ima_dir_update_xattr(struct integrity_iint_cache *iint,
 
 	if (!iint) {
 		/* if iint is NULL, then we allocated iint for new directory */
-		int action;
+		int action, func;
 
 		inode = dentry->d_inode;
+		func = S_ISDIR(inode->i_mode) ? DIR_CHECK : SPECIAL_CHECK;
 
 		/* Determine if in appraise/measurement policy */
-		action = ima_must_appraise(dentry, MAY_READ, DIR_CHECK);
+		action = ima_must_appraise(dentry, MAY_READ, func);
 		if (action <= 0)
 			return;
 
@@ -309,7 +318,7 @@ static void ima_dir_update_xattr(struct integrity_iint_cache *iint,
 		iint->ima_file_status = INTEGRITY_PASS;
 	}
 
-	rc = ima_dir_collect(iint, path, NULL, ima_hash_algo);
+	rc = ima_dir_collect(iint, path, NULL, ima_hash_algo, link);
 	if (!rc)
 		ima_fix_xattr(dentry, iint);
 out:
@@ -326,7 +335,7 @@ out:
  * and is used to re-calculate and update integrity data.
  * It is called with dir i_mutex locked.
  */
-void ima_dir_update(struct path *dir, struct dentry *dentry)
+void ima_dir_update(struct path *dir, struct dentry *dentry, const char *link)
 {
 	struct inode *inode = dir->dentry->d_inode;
 	struct integrity_iint_cache *iint;
@@ -347,7 +356,7 @@ void ima_dir_update(struct path *dir, struct dentry *dentry)
 		/* new entry -> set initial security.ima value */
 		struct path path = { .mnt = dir->mnt, .dentry = dentry };
 		BUG_ON(!dentry->d_inode);
-		ima_dir_update_xattr(NULL, &path);
+		ima_dir_update_xattr(NULL, &path, link);
 	}
 
 	/* do not reset flags for directories, correct ?
@@ -355,6 +364,12 @@ void ima_dir_update(struct path *dir, struct dentry *dentry)
 	*/
 	iint->flags &= ~IMA_COLLECTED;
 	if (iint->flags & IMA_APPRAISE)
-		ima_dir_update_xattr(iint, dir);
+		ima_dir_update_xattr(iint, dir, NULL);
 }
 EXPORT_SYMBOL_GPL(ima_dir_update);
+
+int ima_link_check(struct dentry *dentry, const char *link)
+{
+	struct path path = { .mnt = NULL, .dentry = dentry };
+	return dir_measurement(&path, NULL, MAY_READ, link);
+}

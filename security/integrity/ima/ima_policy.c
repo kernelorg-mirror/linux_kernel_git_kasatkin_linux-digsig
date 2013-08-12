@@ -678,6 +678,8 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 				entry->func = POLICY_CHECK;
 			else if (strcmp(args[0].from, "DIR_CHECK") == 0)
 				entry->func = DIR_CHECK;
+			else if (strcmp(args[0].from, "SPECIAL_CHECK") == 0)
+				entry->func = SPECIAL_CHECK;
 			else
 				result = -EINVAL;
 			if (!result)
