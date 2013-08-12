@@ -325,6 +325,9 @@ const char *ima_d_path(struct path *path, char **pathbuf)
 {
 	char *pathname = NULL;
 
+	if (!path->mnt)
+		return NULL;
+
 	*pathbuf = __getname();
 	if (*pathbuf) {
 		pathname = d_absolute_path(path, *pathbuf, PATH_MAX);

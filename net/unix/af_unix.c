@@ -849,7 +849,7 @@ static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 		if (!err) {
 			res->mnt = mntget(path.mnt);
 			res->dentry = dget(dentry);
-			ima_dir_update(&path, dentry);
+			ima_dir_update(&path, dentry, NULL);
 		}
 	}
 	done_path_create(&path, dentry);
