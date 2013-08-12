@@ -223,8 +223,8 @@ static int process_measurement(struct file *file, const char *filename,
 		ima_store_measurement(iint, file, pathname,
 				      xattr_value, xattr_len);
 	if (action & IMA_APPRAISE_SUBMASK)
-		rc = ima_appraise_measurement(_func, iint, file, pathname,
-					      xattr_value, xattr_len);
+		rc = ima_appraise_measurement(_func, iint, file->f_dentry,
+					      pathname, xattr_value, xattr_len);
 	if (action & IMA_AUDIT)
 		ima_audit_measurement(iint, pathname);
 	kfree(pathbuf);
