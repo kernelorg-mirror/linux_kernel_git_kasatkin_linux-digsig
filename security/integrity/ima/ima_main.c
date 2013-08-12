@@ -259,8 +259,9 @@ static int process_measurement(struct file *file, int mask, int function,
 
 	if (action & IMA_APPRAISE_SUBMASK) {
 		mutex_lock(&inode->i_mutex);
-		rc = ima_appraise_measurement(function, iint, file, pathname,
-					      xattr_value, xattr_len, opened);
+		rc = ima_appraise_measurement(function, iint, file->f_path.dentry,
+					      pathname, xattr_value, xattr_len,
+					      opened);
 		mutex_unlock(&inode->i_mutex);
 	}
 	if (action & IMA_MEASURE)
