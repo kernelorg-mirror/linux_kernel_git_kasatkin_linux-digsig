@@ -85,6 +85,7 @@ extern int ima_dir_check(struct path *dir, int mask);
 extern int ima_special_check(struct file *file, int mask);
 extern void ima_dir_update(struct path *dir, struct dentry *dentry,
 			   const char *link);
+extern int ima_link_check(struct dentry *dentry, const char *link);
 #else
 static inline int ima_dir_check(struct path *dir, int mask)
 {
@@ -100,6 +101,11 @@ static inline void ima_dir_update(struct path *dir, struct dentry *dentry,
 				  const char *link)
 {
 	return;
+}
+
+static inline int ima_link_check(struct dentry *dentry, const char *link)
+{
+	return 0;
 }
 
 #endif /* CONFIG_IMA_APPRAISE_DIRECTORIES */
