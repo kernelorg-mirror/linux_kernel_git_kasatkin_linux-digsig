@@ -170,7 +170,8 @@ void ima_delete_rules(void);
 
 #ifdef CONFIG_IMA_APPRAISE
 int ima_appraise_measurement(int func, struct integrity_iint_cache *iint,
-			     struct file *file, const unsigned char *filename,
+			     struct dentry *dentry,
+			     const unsigned char *filename,
 			     struct evm_ima_xattr_data *xattr_value,
 			     int xattr_len, int opened);
 int ima_must_appraise(struct inode *inode, int mask, enum ima_hooks func);
@@ -185,7 +186,7 @@ int ima_read_xattr(struct dentry *dentry,
 #else
 static inline int ima_appraise_measurement(int func,
 					   struct integrity_iint_cache *iint,
-					   struct file *file,
+					   struct dentry *dentry,
 					   const unsigned char *filename,
 					   struct evm_ima_xattr_data *xattr_value,
 					   int xattr_len, int opened)
