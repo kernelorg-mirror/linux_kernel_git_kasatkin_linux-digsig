@@ -83,7 +83,8 @@ static inline int ima_inode_removexattr(struct dentry *dentry,
 #ifdef CONFIG_IMA_APPRAISE_DIRECTORIES
 extern int ima_dir_check(struct path *dir, int mask);
 extern int ima_special_check(struct file *file, int mask);
-extern void ima_dir_update(struct path *dir, struct dentry *dentry);
+extern void ima_dir_update(struct path *dir, struct dentry *dentry,
+			   const char *link);
 #else
 static inline int ima_dir_check(struct path *dir, int mask)
 {
@@ -95,7 +96,8 @@ static inline int ima_special_check(struct file *file, int mask)
 	return 0;
 }
 
-static inline void ima_dir_update(struct path *dir, struct dentry *dentry)
+static inline void ima_dir_update(struct path *dir, struct dentry *dentry,
+				  const char *link)
 {
 	return;
 }

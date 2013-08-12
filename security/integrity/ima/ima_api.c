@@ -330,6 +330,9 @@ const char *ima_d_path(struct path *path, char **pathbuf)
 {
 	char *pathname = NULL;
 
+	if (!path->mnt)
+		return NULL;
+
 	/* We will allow 11 spaces for ' (deleted)' to be appended */
 	*pathbuf = kmalloc(PATH_MAX + 11, GFP_KERNEL);
 	if (*pathbuf) {
