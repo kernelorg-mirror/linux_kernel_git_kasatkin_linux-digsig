@@ -410,6 +410,19 @@ config DM_VERITY
 	  To compile this code as a module, choose M here: the module will
 	  be called dm-verity.
 
+config DM_INTEGRITY
+	tristate "Integrity target support"
+	depends on BLK_DEV_DM
+	select CRYPTO
+	select CRYPTO_HMAC
+	select DM_BUFIO
+	select KEYS
+	---help---
+	  If you say Y here, then your ...
+
+	  To compile this as a module, choose M here: the module
+	  will be called dm-integrity.
+
 	  If unsure, say N.
 
 config DM_SWITCH
