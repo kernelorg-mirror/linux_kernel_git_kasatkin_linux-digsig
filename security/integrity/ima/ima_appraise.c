@@ -44,8 +44,7 @@ int ima_must_appraise(struct dentry *dentry, int mask, enum ima_hooks func)
 	return ima_match_policy(dentry, func, mask, IMA_APPRAISE, NULL);
 }
 
-static int ima_fix_xattr(struct dentry *dentry,
-			 struct integrity_iint_cache *iint)
+int ima_fix_xattr(struct dentry *dentry, struct integrity_iint_cache *iint)
 {
 	int rc, offset;
 	u8 algo = iint->ima_hash->algo;
