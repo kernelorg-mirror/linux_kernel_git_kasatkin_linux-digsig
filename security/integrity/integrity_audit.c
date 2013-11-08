@@ -28,6 +28,26 @@ static int __init integrity_audit_setup(char *str)
 }
 __setup("integrity_audit=", integrity_audit_setup);
 
+static const char *get_type(struct inode *inode)
+{
+	if (S_ISLNK(inode->i_mode))
+		return "link";
+	else if (S_ISREG(inode->i_mode))
+		return "file";
+	else if (S_ISDIR(inode->i_mode))
+		return "dir";
+	else if (S_ISCHR(inode->i_mode))
+		return "chr";
+	else if (S_ISBLK(inode->i_mode))
+		return "blk";
+	else if (S_ISFIFO(inode->i_mode))
+		return "fifo";
+	else if (S_ISSOCK(inode->i_mode))
+		return "sock";
+	else
+		return "unknown";
+}
+
 void integrity_audit_msg(int audit_msgno, struct inode *inode,
 			 const unsigned char *fname, const char *op,
 			 const char *cause, int result, int audit_info)
@@ -56,6 +76,7 @@ void integrity_audit_msg(int audit_msgno, struct inode *inode,
 		audit_log_untrustedstring(ab, fname);
 	}
 	if (inode) {
+		audit_log_format(ab, " type=%s", get_type(inode));
 		audit_log_format(ab, " dev=");
 		audit_log_untrustedstring(ab, inode->i_sb->s_id);
 		audit_log_format(ab, " ino=%lu", inode->i_ino);
