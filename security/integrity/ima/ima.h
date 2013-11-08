@@ -182,6 +182,7 @@ void ima_get_hash_algo(struct evm_ima_xattr_data *xattr_value, int xattr_len,
 		       struct ima_digest_data *hash);
 int ima_read_xattr(struct dentry *dentry,
 		   struct evm_ima_xattr_data **xattr_value);
+int ima_fix_xattr(struct dentry *dentry, struct integrity_iint_cache *iint);
 
 #else
 static inline int ima_appraise_measurement(int func,

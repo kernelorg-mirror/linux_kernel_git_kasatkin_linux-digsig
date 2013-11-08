@@ -45,8 +45,7 @@ int ima_must_appraise(struct inode *inode, int mask, enum ima_hooks func)
 	return ima_match_policy(inode, func, mask, IMA_APPRAISE);
 }
 
-static int ima_fix_xattr(struct dentry *dentry,
-			 struct integrity_iint_cache *iint)
+int ima_fix_xattr(struct dentry *dentry, struct integrity_iint_cache *iint)
 {
 	int rc, offset;
 	u8 algo = iint->ima_hash->algo;
