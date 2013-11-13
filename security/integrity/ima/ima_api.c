@@ -327,3 +327,53 @@ const char *ima_d_path(struct path *path, char **pathbuf)
 	}
 	return pathname ?: (const char *)path->dentry->d_name.name;
 }
+
+static int prepend(char **buffer, int buflen, const char *str, int namelen)
+{
+	buflen -= namelen;
+	if (buflen < 0)
+		return -ENAMETOOLONG;
+	*buffer -= namelen;
+	memcpy(*buffer, str, namelen);
+	return 0;
+}
+
+/*
+ * ima_dentry_path - returns device related path
+ *
+ * Returns device related path in a form: sda1:/usr/ls
+ * Device related is definitive way to describe object path
+ * d_path() or d_absolute_path() are not very suitable as they
+ * return mount hierarchy and chroot specific path
+ */
+const char *ima_dentry_path(struct dentry *dentry, char **pathbuf)
+{
+	char bdname[BDEVNAME_SIZE + 1];
+	int namelen;
+	char *pathname;
+	struct super_block *sb = dentry->d_sb;
+
+	*pathbuf = __getname();
+	if (!*pathbuf)
+		return NULL;
+
+	if (sb->s_bdev)
+		bdevname(sb->s_bdev, bdname);
+	else
+		strcpy(bdname, sb->s_type->name);
+
+	namelen = strlen(bdname);
+
+	pathname = dentry_path_raw(dentry, *pathbuf, PATH_MAX - namelen - 1);
+	if (IS_ERR(pathname))
+		goto err;
+
+	prepend(&pathname, pathname - *pathbuf, ":", 1);
+	prepend(&pathname, pathname - *pathbuf, bdname, namelen);
+
+	return pathname;
+err:
+	__putname(*pathbuf);
+	*pathbuf = NULL;
+	return NULL;
+}

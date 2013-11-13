@@ -29,6 +29,7 @@
 #define IMA_FSUUID	0x0020
 #define IMA_INMASK	0x0040
 #define IMA_EUID	0x0080
+#define IMA_PATH	0x0100
 
 #define UNKNOWN		0
 #define MEASURE		0x0001	/* same as IMA_MEASURE */
@@ -119,6 +120,7 @@ static struct ima_rule_entry default_appraise_rules[] = {
 static LIST_HEAD(ima_default_rules);
 static LIST_HEAD(ima_policy_rules);
 static struct list_head *ima_rules;
+static bool path_rules;
 
 static DEFINE_MUTEX(ima_rules_mutex);
 
@@ -192,7 +194,8 @@ static void ima_lsm_update_rules(void)
  * Returns true on rule match, false on failure.
  */
 static bool ima_match_rules(struct ima_rule_entry *rule,
-			    struct inode *inode, enum ima_hooks func, int mask)
+			    struct inode *inode, enum ima_hooks func, int mask,
+			    const char *pathname)
 {
 	struct task_struct *tsk = current;
 	const struct cred *cred = current_cred();
@@ -227,6 +230,14 @@ static bool ima_match_rules(struct ima_rule_entry *rule,
 
 	if ((rule->flags & IMA_FOWNER) && !uid_eq(rule->fowner, inode->i_uid))
 		return false;
+	if ((rule->flags & IMA_PATH)) {
+		char *pos = (char *)pathname;
+		if (rule->path[0] == '/')
+			/* cut device part of the pathname */
+			pos = 1 + strchr(pathname, ':');
+		if (strncmp(pos, rule->path, rule->path_len))
+			return false;
+	}
 	for (i = 0; i < MAX_LSM_RULES; i++) {
 		int rc = 0;
 		u32 osid, sid;
@@ -314,13 +325,22 @@ int ima_match_policy(struct dentry *dentry, enum ima_hooks func, int mask,
 	struct inode *inode = dentry->d_inode;
 	struct ima_rule_entry *entry;
 	int action = 0, actmask = flags | (flags << 1);
+	char *pathbuf = NULL;
+	const char *pathname = NULL;
+
+	if (path_rules) {
+		/* resolve path only if we have path rules */
+		pathname = ima_dentry_path(dentry, &pathbuf);
+		if (!pathname)
+			return -ENOMEM;
+	}
 
 	list_for_each_entry(entry, ima_rules, list) {
 
 		if (!(entry->action & actmask))
 			continue;
 
-		if (!ima_match_rules(entry, inode, func, mask))
+		if (!ima_match_rules(entry, inode, func, mask, pathname))
 			continue;
 
 		action |= entry->flags & IMA_ACTION_FLAGS;
@@ -340,7 +360,8 @@ int ima_match_policy(struct dentry *dentry, enum ima_hooks func, int mask,
 		if (!actmask)
 			break;
 	}
-
+	if (pathbuf)
+		__putname(pathbuf);
 	return action;
 }
 
@@ -432,7 +453,7 @@ enum {
 	Opt_func, Opt_mask, Opt_fsmagic,
 	Opt_uid, Opt_euid, Opt_fowner,
 	Opt_appraise_type, Opt_fsuuid, Opt_permit_directio,
-	Opt_cap_drop
+	Opt_cap_drop, Opt_path
 };
 
 static match_table_t policy_tokens = {
@@ -457,6 +478,7 @@ static match_table_t policy_tokens = {
 	{Opt_appraise_type, "appraise_type=%s"},
 	{Opt_permit_directio, "permit_directio"},
 	{Opt_cap_drop, "cap_drop=%s"},
+	{Opt_path, "path=%s"},
 	{Opt_err, NULL}
 };
 
@@ -809,6 +831,18 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 
 			ima_log_string(ab, "cap_drop", args[0].from);
 			result = ima_parse_cap(entry, args[0].from);
+			break;
+		case Opt_path:
+			ima_log_string(ab, "path", args[0].from);
+			entry->path_len = strlen(args[0].from);
+			entry->path = kstrdup(args[0].from, GFP_KERNEL);
+			if (entry->path) {
+				if (entry->path[entry->path_len - 1] == '/')
+					entry->path_len--; /* remove '/' */
+				entry->flags |= IMA_PATH;
+				path_rules = true; /* if we have any path rules */
+			} else
+				result = -EINVAL;
 			break;
 		case Opt_err:
 			ima_log_string(ab, "UNKNOWN", p);
