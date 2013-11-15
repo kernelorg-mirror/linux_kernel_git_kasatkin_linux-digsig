@@ -346,14 +346,15 @@ static int prepend(char **buffer, int buflen, const char *str, int namelen)
  * d_path() or d_absolute_path() are not very suitable as they
  * return mount hierarchy and chroot specific path
  */
-const char *ima_dentry_path(struct dentry *dentry, char **pathbuf)
+const char *ima_dentry_path(struct dentry *dentry, char **pathbuf, int mask)
 {
 	char bdname[BDEVNAME_SIZE + 1];
 	int namelen;
 	char *pathname;
 	struct super_block *sb = dentry->d_sb;
+	gfp_t gfp = (mask & MAY_NOT_BLOCK) ? GFP_ATOMIC : GFP_KERNEL;
 
-	*pathbuf = __getname();
+	*pathbuf = kmem_cache_alloc(names_cachep, gfp);
 	if (!*pathbuf)
 		return NULL;
 

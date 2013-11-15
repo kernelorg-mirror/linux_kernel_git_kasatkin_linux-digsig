@@ -330,7 +330,7 @@ int ima_match_policy(struct dentry *dentry, enum ima_hooks func, int mask,
 
 	if (path_rules) {
 		/* resolve path only if we have path rules */
-		pathname = ima_dentry_path(dentry, &pathbuf);
+		pathname = ima_dentry_path(dentry, &pathbuf, mask);
 		if (!pathname)
 			return -ENOMEM;
 	}
