@@ -308,9 +308,10 @@ static int get_subaction(struct ima_rule_entry *rule, int func)
  * as elements in the list are never deleted, nor does the list
  * change.)
  */
-int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask,
+int ima_match_policy(struct dentry *dentry, enum ima_hooks func, int mask,
 		     int flags, struct ima_action_context *ctx)
 {
+	struct inode *inode = dentry->d_inode;
 	struct ima_rule_entry *entry;
 	int action = 0, actmask = flags | (flags << 1);
 

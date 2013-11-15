@@ -178,7 +178,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	 * bitmask based on the appraise/audit/measurement policy.
 	 * Included is the appraise submask.
 	 */
-	action = ima_get_action(inode, mask, function, &ctx);
+	action = ima_get_action(file->f_path.dentry, mask, function, &ctx);
 	violation_check = ((function == FILE_CHECK || function == MMAP_CHECK) &&
 			   (ima_policy_flag & IMA_MEASURE));
 	if (!action && !violation_check)

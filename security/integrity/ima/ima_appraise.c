@@ -36,12 +36,12 @@ __setup("ima_appraise=", default_appraise_setup);
  *
  * Return 1 to appraise
  */
-int ima_must_appraise(struct inode *inode, int mask, enum ima_hooks func)
+int ima_must_appraise(struct dentry *dentry, int mask, enum ima_hooks func)
 {
 	if (!ima_appraise)
 		return 0;
 
-	return ima_match_policy(inode, func, mask, IMA_APPRAISE, NULL);
+	return ima_match_policy(dentry, func, mask, IMA_APPRAISE, NULL);
 }
 
 static int ima_fix_xattr(struct dentry *dentry,
@@ -336,7 +336,7 @@ void ima_inode_post_setattr(struct dentry *dentry)
 	    || !inode->i_op->removexattr)
 		return;
 
-	must_appraise = ima_must_appraise(inode, MAY_ACCESS, POST_SETATTR);
+	must_appraise = ima_must_appraise(dentry, MAY_ACCESS, POST_SETATTR);
 	if (!must_appraise)
 		inode->i_op->removexattr(dentry, XATTR_NAME_IMA);
 	iint = integrity_iint_find(inode);
