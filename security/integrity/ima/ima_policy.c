@@ -496,6 +496,8 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 				entry->func = MMAP_CHECK;
 			else if (strcmp(args[0].from, "BPRM_CHECK") == 0)
 				entry->func = BPRM_CHECK;
+			else if (strcmp(args[0].from, "DIR_CHECK") == 0)
+				entry->func = DIR_CHECK;
 			else
 				result = -EINVAL;
 			if (!result)
