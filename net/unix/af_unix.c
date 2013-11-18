@@ -117,6 +117,7 @@
 #include <net/checksum.h>
 #include <linux/security.h>
 #include <linux/freezer.h>
+#include <linux/ima.h>
 
 struct hlist_head unix_socket_table[2 * UNIX_HASH_SIZE];
 EXPORT_SYMBOL_GPL(unix_socket_table);
@@ -848,6 +849,7 @@ static int unix_mknod(const char *sun_path, umode_t mode, struct path *res)
 		if (!err) {
 			res->mnt = mntget(path.mnt);
 			res->dentry = dget(dentry);
+			ima_dir_update(&path, dentry);
 		}
 	}
 	done_path_create(&path, dentry);

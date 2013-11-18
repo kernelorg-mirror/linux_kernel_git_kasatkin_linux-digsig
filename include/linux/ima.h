@@ -79,4 +79,27 @@ static inline int ima_inode_removexattr(struct dentry *dentry,
 	return 0;
 }
 #endif /* CONFIG_IMA_APPRAISE */
+
+#ifdef CONFIG_IMA_APPRAISE_DIRECTORIES
+extern int ima_dir_check(struct path *dir, int mask);
+extern int ima_special_check(struct file *file, int mask);
+extern void ima_dir_update(struct path *dir, struct dentry *dentry);
+#else
+static inline int ima_dir_check(struct path *dir, int mask)
+{
+	return 0;
+}
+
+static inline int ima_special_check(struct file *file, int mask)
+{
+	return 0;
+}
+
+static inline void ima_dir_update(struct path *dir, struct dentry *dentry)
+{
+	return;
+}
+
+#endif /* CONFIG_IMA_APPRAISE_DIRECTORIES */
+
 #endif /* _LINUX_IMA_H */

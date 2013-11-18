@@ -290,6 +290,9 @@ int ima_bprm_check(struct linux_binprm *bprm)
  */
 int ima_file_check(struct file *file, int mask)
 {
+	if (!S_ISREG(file->f_dentry->d_inode->i_mode))
+		return ima_special_check(file, mask);
+
 	ima_rdwr_violation_check(file);
 	return process_measurement(file, NULL,
 				   mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
