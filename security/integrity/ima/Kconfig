@@ -131,3 +131,11 @@ config IMA_TRUSTED_KEYRING
 	help
 	   This option requires that all keys added to the .ima
 	   keyring be signed by a key on the system trusted keyring.
+config IMA_APPRAISE_DIRECTORIES
+	bool "Performs directory integrity appraisal"
+	depends on IMA_APPRAISE
+	default n
+	help
+	  This option enables directory integrity appraisal.
+
+	  If unsure, say N.
