@@ -171,3 +171,12 @@ config IMA_POLICY_PATH
 	default "/etc/ima/ima_policy"
 	help
 	   This option defines IMA policy path.
+
+config IMA_APPRAISE_DIRECTORIES
+	bool "Performs directory integrity appraisal"
+	depends on IMA_APPRAISE
+	default n
+	help
+	  This option enables directory integrity appraisal.
+
+	  If unsure, say N.

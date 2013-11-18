@@ -142,7 +142,7 @@ static inline unsigned long ima_hash_key(u8 *digest)
 
 /* IMA policy related functions */
 enum ima_hooks { FILE_CHECK = 1, MMAP_CHECK, BPRM_CHECK, MODULE_CHECK,
-		 FIRMWARE_CHECK, POLICY_CHECK, POST_SETATTR };
+		 FIRMWARE_CHECK, POLICY_CHECK, DIR_CHECK, POST_SETATTR };
 
 #define MAX_LSM_RULES 6
 enum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,
