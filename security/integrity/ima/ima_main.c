@@ -362,6 +362,11 @@ int ima_bprm_check(struct linux_binprm *bprm)
  */
 int ima_file_check(struct file *file, int mask, int opened)
 {
+	struct inode *inode = d_backing_inode(file->f_path.dentry);
+
+	if (!S_ISREG(inode->i_mode))
+		return ima_special_check(file, mask);
+
 	return process_measurement(file,
 				   mask & (MAY_READ | MAY_WRITE | MAY_EXEC),
 				   FILE_CHECK, opened);

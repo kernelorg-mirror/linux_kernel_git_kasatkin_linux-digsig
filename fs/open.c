@@ -428,6 +428,9 @@ retry:
 	error = inode_permission(path.dentry->d_inode, MAY_EXEC | MAY_CHDIR);
 	if (error)
 		goto dput_and_out;
+	error = ima_dir_check(&path, MAY_EXEC);
+	if (error)
+		goto dput_and_out;
 
 	set_fs_pwd(current->fs, &path);
 
@@ -458,6 +461,9 @@ SYSCALL_DEFINE1(fchdir, unsigned int, fd)
 		goto out_putf;
 
 	error = inode_permission(inode, MAY_EXEC | MAY_CHDIR);
+	if (error)
+		goto out_putf;
+	error = ima_dir_check(&f.file->f_path, MAY_EXEC);
 	if (!error)
 		set_fs_pwd(current->fs, &f.file->f_path);
 out_putf:

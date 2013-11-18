@@ -1639,16 +1639,33 @@ static int lookup_slow(struct nameidata *nd, struct path *path)
 	return follow_managed(path, nd);
 }
 
+static inline int may_lookup_ima(struct nameidata *nd, int err)
+{
+	if (err)
+		return err;
+	err = ima_dir_check(&nd->path, MAY_EXEC|MAY_NOT_BLOCK);
+	if (err != -ECHILD)
+		return err;
+	if (unlazy_walk(nd, NULL, 0))
+		return -ECHILD;
+	return ima_dir_check(&nd->path, MAY_EXEC);
+}
+
 static inline int may_lookup(struct nameidata *nd)
 {
+	int err = 0;
+
 	if (nd->flags & LOOKUP_RCU) {
-		int err = inode_permission(nd->inode, MAY_EXEC|MAY_NOT_BLOCK);
+		err = inode_permission(nd->inode, MAY_EXEC|MAY_NOT_BLOCK);
 		if (err != -ECHILD)
-			return err;
+			return may_lookup_ima(nd, err);
 		if (unlazy_walk(nd, NULL, 0))
 			return -ECHILD;
 	}
-	return inode_permission(nd->inode, MAY_EXEC);
+	err = inode_permission(nd->inode, MAY_EXEC);
+	if (err)
+		return err;
+	return ima_dir_check(&nd->path, MAY_EXEC);
 }
 
 static inline int handle_dots(struct nameidata *nd, int type)
@@ -3081,6 +3098,8 @@ retry_lookup:
 	}
 	mutex_lock(&dir->d_inode->i_mutex);
 	error = lookup_open(nd, &path, file, op, got_write, opened);
+	if (error >= 0 && (*opened & FILE_CREATED))
+		ima_dir_update(&nd->path, NULL);
 	mutex_unlock(&dir->d_inode->i_mutex);
 
 	if (error <= 0) {
@@ -3566,6 +3585,8 @@ retry:
 			error = vfs_mknod(path.dentry->d_inode,dentry,mode,0);
 			break;
 	}
+	if (!error)
+		ima_dir_update(&path, dentry);
 out:
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
@@ -3623,6 +3644,8 @@ retry:
 	error = security_path_mkdir(&path, dentry, mode);
 	if (!error)
 		error = vfs_mkdir(path.dentry->d_inode, dentry, mode);
+	if (!error)
+		ima_dir_update(&path, dentry);
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
@@ -3744,6 +3767,8 @@ retry:
 	if (error)
 		goto exit3;
 	error = vfs_rmdir(path.dentry->d_inode, dentry);
+	if (!error)
+		ima_dir_update(&path, NULL);
 exit3:
 	dput(dentry);
 exit2:
@@ -3868,6 +3893,8 @@ retry_deleg:
 		if (error)
 			goto exit2;
 		error = vfs_unlink(path.dentry->d_inode, dentry, &delegated_inode);
+		if (!error)
+			ima_dir_update(&path, NULL);
 exit2:
 		dput(dentry);
 	}
@@ -3959,6 +3986,8 @@ retry:
 	error = security_path_symlink(&path, dentry, from->name);
 	if (!error)
 		error = vfs_symlink(path.dentry->d_inode, dentry, from->name);
+	if (!error)
+		ima_dir_update(&path, dentry);
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
@@ -4101,6 +4130,8 @@ retry:
 	if (error)
 		goto out_dput;
 	error = vfs_link(old_path.dentry, new_path.dentry->d_inode, new_dentry, &delegated_inode);
+	if (!error)
+		ima_dir_update(&new_path, NULL);
 out_dput:
 	done_path_create(&new_path, new_dentry);
 	if (delegated_inode) {
@@ -4423,6 +4454,11 @@ retry_deleg:
 	error = vfs_rename(old_path.dentry->d_inode, old_dentry,
 			   new_path.dentry->d_inode, new_dentry,
 			   &delegated_inode, flags);
+	if (!error) {
+		ima_dir_update(&old_path, NULL);
+		if (!path_equal(&old_path, &new_path))
+			ima_dir_update(&new_path, NULL);
+	}
 exit5:
 	dput(new_dentry);
 exit4:
