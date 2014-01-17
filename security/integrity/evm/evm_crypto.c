@@ -146,7 +146,11 @@ static void hmac_add_misc(struct shash_desc *desc, struct inode *inode,
 
 	memset(&hmac_misc, 0, sizeof(hmac_misc));
 	hmac_misc.ino = inode->i_ino;
-	hmac_misc.generation = inode->i_generation;
+	/* inode generation can be read from user space only
+	 * for files and directories
+	 */
+	if (S_ISREG(inode->i_mode) || S_ISDIR(inode->i_mode))
+		hmac_misc.generation = inode->i_generation;
 	hmac_misc.uid = from_kuid(&init_user_ns, inode->i_uid);
 	hmac_misc.gid = from_kgid(&init_user_ns, inode->i_gid);
 	hmac_misc.mode = inode->i_mode;
