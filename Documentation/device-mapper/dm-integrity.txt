@@ -1,0 +1,156 @@
+dm-integrity
+===============
+
+Device-mapper "integrity" target provides transparent cryptographic integrity
+protection of the underlying read-write block device using hash-based message
+authentication codes (HMACs). HMACs can be stored on the same or different
+block device.
+
+dm-integrity uses an encrypted key type, stored on the kernel keyring, to
+obtain a secret key for use in cryptographic operations. Encrypted keys are
+never exposed in plain text to user space. The encrypted keys are encrypted
+using master key, which can either be a user defined or trusted key type.
+The secret key, which is usually device specific, binds integrity data to the
+device. As a result data blocks and corresponding HMACs cannot simply be
+copied over from other file systems.
+
+Parameters:
+<dev> <bs> <start> <hdev> <hbs> <hstart> <hash_algo> <hmac_algo> <key_desc> \
+[<opt_params>]
+
+<dev>
+    This is the device that is going to be used to store the data.
+    You can specify it as a path like /dev/xxx or a device <major>:<minor>
+    number.
+
+<bs>
+    Device block size.
+    
+<start>
+    Starting sector within the device where data begins.
+
+<hdev>
+    This is the device that is going to be used to store integrity data.
+    You can specify it as a path like /dev/xxx or a device <major>:<minor>
+    number.
+
+<hbs>
+    HMAC device block size.
+    
+<hstart>
+    Starting sector within the device where integrity data begins.
+
+<hash_algo>
+    Hash algorithm (sha1, sha256, etc).
+    
+<hmac_algo>
+    HMAC algorithm, e.g. hmac(sha1), hmac(sha256), etc.
+    
+<key_desc> 
+    Description is a name of a key in the kernel keyring.
+
+<opt_params>
+    fix		Enable fix mode.
+		In fix mode, incorrect hmacs are replaced with correct ones.
+		It is used for device initialization and debugging.
+
+    stats	Turns on collecting additional statistical information.
+		It is used to find out resource usage to tune memory pool
+		and queue sizes for particular use case.
+    
+    verbose	Prints block number, collected hmac and stored hmac.
+		It is used for addition debug output.
+    
+
+Determine the size of integrity/hmac device
+===============
+
+Every block device has corresponding hmac.
+While NIST does recommend to use sha256 hash algorithm instead of SHA1,
+this does not apply to hmac(sha1), because of keying. It is safe to use
+hmac(sha1), because it takes much less space and it is faster to calculate.
+hmac(sha1) size is 20 bytes. So every 4k block on the integrity device can
+store 204 hmacs. In order to get the required size of the integrity device,
+it is necessary to divide data device size by 204. See examples bellow how
+to do it from script.
+
+Example scripts
+===============
+
+1. Setting up integrity target using data and hmac store on the same block device.
+
+[[
+#!/bin/sh
+
+bdev=$1
+
+# block device size
+dsize=`blockdev --getsize $bdev`
+# block size
+bs=4096
+# sector to block shift
+sbs=3
+# integrity record size (hmac size)
+hmac=20
+# hmacs per block
+hpb=$((bs/hmac))
+# target device size
+size=$((((dsize>>sbs)*hpb/(hpb+1))<<sbs))
+
+# load the key - in this example we just use test key
+keyctl add user kmk "testing123" @u
+keyctl add encrypted dm-int-key "load `cat /etc/keys/dm-int-key`" @u
+
+# creating the target
+table="0 $size integrity $bdev 4096 0 $bdev 4096 $size sha1 hmac(sha1) dm-int-key"
+dmsetup create dm-int --table "$table"
+
+# mounting
+mount /dev/mapper/dm-int /mnt
+
+]]
+
+2. Setting up integrity target using data and hmac store on different block devices.
+
+[[
+#!/bin/sh
+
+bdev=$1
+hdev=$2
+
+# get size of the block device
+dsize=`blockdev --getsz $bdev`
+# round down the size to 4k blocks
+dsize=$((dsize & ~7))
+
+# load the key - in this example we just use test key
+keyctl add user kmk "testing123" @u
+keyctl add encrypted dm-int-key "load `cat /etc/keys/dm-int-key`" @u
+
+# creating the target
+table="0 $dsize integrity $bdev 4096 0 $hdev 4096 0 sha1 hmac(sha1) dm-int-key"
+dmsetup create dm-int --table "$table"
+
+# mounting
+mount /dev/mapper/dm-int /mnt
+
+]]
+
+3. Create dm-int-key
+
+[[
+#!/bin/sh
+
+
+# Add the master key which will be used to encrypt dm-int-key
+keyctl add user kmk "testing123" @u
+# Create new encrypted key, which is encrypted with 'kmk'
+keyid=`keyctl add encrypted dm-int-key "new user:kmk 32" @u`
+# export encrypted key to your keys directory
+keyctl print $keyid >/etc/keys/dm-int-key
+
+]]
+
+For more information how to create different types of encrypted keys,
+please read Documentation/security/keys-trusted-encrypted.txt
+
