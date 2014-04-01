@@ -50,6 +50,19 @@ static const struct file_operations ima_htable_violations_ops = {
 	.llseek = generic_file_llseek,
 };
 
+static ssize_t ima_show_htable_infringements(struct file *filp,
+					  char __user *buf,
+					  size_t count, loff_t *ppos)
+{
+	return ima_show_htable_value(buf, count, ppos,
+				     &ima_htable.infringements);
+}
+
+static const struct file_operations ima_htable_infringements_ops = {
+	.read = ima_show_htable_infringements,
+	.llseek = generic_file_llseek,
+};
+
 static ssize_t ima_show_measurements_count(struct file *filp,
 					   char __user *buf,
 					   size_t count, loff_t *ppos)
@@ -332,6 +345,7 @@ static struct dentry *binary_runtime_measurements;
 static struct dentry *ascii_runtime_measurements;
 static struct dentry *runtime_measurements_count;
 static struct dentry *violations;
+static struct dentry *infringements;
 static struct dentry *ima_policy;
 
 enum ima_fs_flags {
@@ -455,6 +469,12 @@ int __init ima_fs_init(void)
 	if (IS_ERR(violations))
 		goto out;
 
+	infringements =
+	    securityfs_create_file("infringements", S_IRUSR | S_IRGRP, ima_dir,
+				   NULL, &ima_htable_infringements_ops);
+	if (IS_ERR(infringements))
+		goto out;
+
 	ima_policy = securityfs_create_file("policy",
 #ifndef CONFIG_IMA_READABLE_POLICY_INTERFACE
 					    S_IWUSR,
@@ -469,6 +489,7 @@ int __init ima_fs_init(void)
 	return 0;
 out:
 	securityfs_remove(violations);
+	securityfs_remove(infringements);
 	securityfs_remove(runtime_measurements_count);
 	securityfs_remove(ascii_runtime_measurements);
 	securityfs_remove(binary_runtime_measurements);

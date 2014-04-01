@@ -34,6 +34,7 @@ LIST_HEAD(ima_measurements);	/* list of all measurements */
 struct ima_h_table ima_htable = {
 	.len = ATOMIC_LONG_INIT(0),
 	.violations = ATOMIC_LONG_INIT(0),
+	.infringements = ATOMIC_LONG_INIT(0),
 	.queue[0 ... IMA_MEASURE_HTABLE_SIZE - 1] = HLIST_HEAD_INIT
 };
 

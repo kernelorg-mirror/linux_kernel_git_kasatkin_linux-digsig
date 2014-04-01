@@ -289,6 +289,8 @@ out:
 		}
 		integrity_audit_msg(AUDIT_INTEGRITY_DATA, inode, filename,
 				    op, cause, rc, 0);
+		if (rc != INTEGRITY_PASS)
+			atomic_long_inc(&ima_htable.infringements);
 	} else {
 		ima_cache_flags(iint, func);
 	}
