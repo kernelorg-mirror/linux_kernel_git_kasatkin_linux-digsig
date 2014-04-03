@@ -190,3 +190,13 @@ config IMA_READABLE_POLICY_INTERFACE
 	 interface.
 
 	 WARNING: Enable this option only if your really need it.
+
+config IMA_STATE_INTERFACE
+	bool "IMA state interface"
+	depends on IMA_APPRAISE
+	default n
+	help
+	 Create the IMA state interface and makes possible change IMA
+	 state in runtime.
+
+	 WARNING: Enable this option only if your really need it.
