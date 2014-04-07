@@ -327,3 +327,33 @@ int ima_eventsig_init(struct ima_event_data *event_data,
 out:
 	return rc;
 }
+
+int ima_eventstatus_init(struct ima_event_data *event_data,
+			 struct ima_field_data *field_data)
+{
+	u8 status = INTEGRITY_UNKNOWN;
+	struct integrity_iint_cache *iint = event_data->iint;
+
+	if (!iint)
+		goto out;
+
+	switch (iint->last_function) {
+	case MMAP_CHECK:
+		status = iint->ima_mmap_status;
+		break;
+	case BPRM_CHECK:
+		status = iint->ima_bprm_status;
+		break;
+	case MODULE_CHECK:
+		status = iint->ima_module_status;
+		break;
+	case FILE_CHECK:
+	default:
+		status = iint->ima_file_status;
+		break;
+	}
+
+out:
+	return ima_write_template_field_data(&status, sizeof(status),
+					     DATA_FMT_HEX, field_data);
+}

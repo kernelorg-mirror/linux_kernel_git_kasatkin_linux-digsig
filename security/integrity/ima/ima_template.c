@@ -22,6 +22,7 @@ static struct ima_template_desc defined_templates[] = {
 	{.name = IMA_TEMPLATE_IMA_NAME, .fmt = IMA_TEMPLATE_IMA_FMT},
 	{.name = "ima-ng", .fmt = "d-ng|n-ng"},
 	{.name = "ima-sig", .fmt = "d-ng|n-ng|sig"},
+	{.name = "ima-ng-ctrl", .fmt = "d-ng|n-ng|status"},
 	{.name = "", .fmt = ""},	/* placeholder for a custom format */
 };
 
@@ -35,6 +36,8 @@ static struct ima_template_field supported_fields[] = {
 	{.field_id = "n-ng", .field_init = ima_eventname_ng_init,
 	 .field_show = ima_show_template_string},
 	{.field_id = "sig", .field_init = ima_eventsig_init,
+	 .field_show = ima_show_template_hex},
+	{.field_id = "status", .field_init = ima_eventstatus_init,
 	 .field_show = ima_show_template_hex},
 };
 

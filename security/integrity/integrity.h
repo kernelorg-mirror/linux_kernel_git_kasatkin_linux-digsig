@@ -125,6 +125,7 @@ struct integrity_iint_cache {
 	u64 version;		/* track inode changes */
 	unsigned long flags;
 	unsigned long atomic_flags;
+	int last_function;
 	enum integrity_status ima_file_status:4;
 	enum integrity_status ima_mmap_status:4;
 	enum integrity_status ima_bprm_status:4;

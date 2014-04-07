@@ -110,6 +110,7 @@ static void ima_set_cache_status(struct integrity_iint_cache *iint,
 		iint->ima_file_status = status;
 		break;
 	}
+	iint->last_function = func;
 }
 
 static void ima_cache_flags(struct integrity_iint_cache *iint, int func)
