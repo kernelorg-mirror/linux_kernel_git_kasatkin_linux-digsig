@@ -205,10 +205,8 @@ int integrity_kernel_read(struct file *file, loff_t offset,
  * This is function opens a file, allocates the buffer of required
  * size, read entire file content to the buffer and closes the file
  *
- * It is used only by init code.
- *
  */
-int __init integrity_read_file(const char *path, char **data)
+int integrity_read_file(const char *path, char **data)
 {
 	struct file *file;
 	loff_t size;

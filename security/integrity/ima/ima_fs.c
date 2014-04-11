@@ -256,6 +256,40 @@ static const struct file_operations ima_ascii_measurements_ops = {
 	.release = seq_release,
 };
 
+static ssize_t ima_read_policy(char *path)
+{
+	char *data, *datap;
+	int rc, size, pathlen = strlen(path);
+	char *p;
+
+	/* remove \n */
+	datap = path;
+	strsep(&datap, "\n");
+
+	rc = integrity_read_file(path, &data);
+	if (rc < 0)
+		return rc;
+
+	size = rc;
+	datap = data;
+
+	while (size > 0 && (p = strsep(&datap, "\n"))) {
+		pr_debug("rule: %s\n", p);
+		rc = ima_parse_add_rule(p);
+		if (rc < 0)
+			break;
+		size -= rc;
+	}
+
+	kfree(data);
+	if (rc < 0)
+		return rc;
+	else if (size)
+		return -EINVAL;
+	else
+		return pathlen;
+}
+
 static ssize_t ima_write_policy(struct file *file, const char __user *buf,
 				size_t datalen, loff_t *ppos)
 {
@@ -281,7 +315,10 @@ static ssize_t ima_write_policy(struct file *file, const char __user *buf,
 	if (copy_from_user(data, buf, datalen))
 		goto out;
 
-	result = ima_parse_add_rule(data);
+	if (data[0] == '/')
+		result = ima_read_policy(data);
+	else
+		result = ima_parse_add_rule(data);
 out:
 	if (result < 0)
 		valid_policy = 0;
