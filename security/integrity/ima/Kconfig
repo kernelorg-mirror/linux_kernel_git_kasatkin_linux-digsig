@@ -158,3 +158,16 @@ config IMA_APPRAISE_SIGNED_INIT
 	default n
 	help
 	   This option requires user-space init to be signed.
+
+config IMA_LOAD_POLICY
+	bool "Load IMA policy from the kernel"
+	default n
+	help
+	  This option enables IMA policy loading from the kernel.
+
+config IMA_POLICY_PATH
+	string "IMA policy path"
+	depends on IMA_LOAD_POLICY
+	default "/etc/ima/ima_policy"
+	help
+	   This option defines IMA policy path.

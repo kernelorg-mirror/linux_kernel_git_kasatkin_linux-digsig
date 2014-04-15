@@ -28,6 +28,16 @@
 static const char *boot_aggregate_name = "boot_aggregate";
 int ima_used_chip;
 
+static int ima_load;
+
+static int __init ima_setup(char *str)
+{
+	ima_load = 1;
+	return 1;
+}
+__setup("ima_load", ima_setup);
+
+
 /* Add the boot aggregate to the IMA measurement list and extend
  * the PCR register.
  *
@@ -99,6 +109,8 @@ void __init ima_load_x509(void)
 
 	ima_policy_flag &= ~unset_flags;
 	integrity_load_x509(INTEGRITY_KEYRING_IMA, CONFIG_IMA_X509_PATH);
+	if (ima_load)
+		ima_load_policy(CONFIG_IMA_POLICY_PATH);
 	ima_policy_flag |= unset_flags;
 }
 #endif

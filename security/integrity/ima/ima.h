@@ -200,6 +200,14 @@ bool ima_default_policy(void);
 ssize_t ima_parse_add_rule(char *);
 void ima_delete_rules(void);
 
+#ifdef CONFIG_IMA_LOAD_POLICY
+void ima_load_policy(char *path);
+#else
+static inline void ima_load_policy(char *path)
+{
+}
+#endif
+
 /* Appraise integrity measurements */
 #define IMA_APPRAISE_ENFORCE	0x01
 #define IMA_APPRAISE_FIX	0x02

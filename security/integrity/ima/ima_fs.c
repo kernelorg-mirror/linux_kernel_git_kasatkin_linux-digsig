@@ -363,7 +363,7 @@ static int ima_open_policy(struct inode *inode, struct file *filp)
  * point to the new policy rules, and remove the securityfs policy file,
  * assuming a valid policy.
  */
-static int ima_release_policy(struct inode *inode, struct file *file)
+static void ima_check_policy(void)
 {
 	const char *cause = valid_policy ? "completed" : "failed";
 
@@ -378,6 +378,11 @@ static int ima_release_policy(struct inode *inode, struct file *file)
 		ima_update_policy();
 	}
 	clear_bit(IMA_FS_BUSY, &ima_fs_flags);
+}
+
+static int ima_release_policy(struct inode *inode, struct file *file)
+{
+	ima_check_policy();
 	return 0;
 }
 
@@ -387,6 +392,17 @@ static const struct file_operations ima_measure_policy_ops = {
 	.release = ima_release_policy,
 	.llseek = generic_file_llseek,
 };
+
+#ifdef CONFIG_IMA_LOAD_POLICY
+void __init ima_load_policy(char *path)
+{
+	if (test_and_set_bit(IMA_FS_BUSY, &ima_fs_flags))
+		return;
+	if (ima_read_policy(path) < 0)
+		valid_policy = 0;
+	ima_check_policy();
+}
+#endif
 
 int __init ima_fs_init(void)
 {
