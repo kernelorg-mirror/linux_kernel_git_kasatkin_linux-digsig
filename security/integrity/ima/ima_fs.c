@@ -377,10 +377,12 @@ static int ima_open_policy(struct inode *inode, struct file *filp)
 #endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
 	if (test_and_set_bit(IMA_FS_BUSY, &ima_fs_flags))
 		return -EBUSY;
+#ifndef CONFIG_IMA_POLICY_REPLACEABLE
 	if (!ima_default_policy()) {
 		clear_bit(IMA_FS_BUSY, &ima_fs_flags);
 		return -EACCES;
 	}
+#endif
 	return 0;
 }
 

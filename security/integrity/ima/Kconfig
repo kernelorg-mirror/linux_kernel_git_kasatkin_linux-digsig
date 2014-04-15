@@ -159,6 +159,14 @@ config IMA_APPRAISE_SIGNED_INIT
 	help
 	   This option requires user-space init to be signed.
 
+config IMA_POLICY_REPLACEABLE
+	bool "Allows to replace policy at runtime"
+	depends on IMA_POLICY_LOADER
+	default n
+	help
+	  Enabling this option allows to replace policy at runtime.
+	  Only signed policy is allowed.
+
 config IMA_LOAD_POLICY
 	bool "Load IMA policy from the kernel"
 	default n

@@ -101,10 +101,13 @@ static struct ima_rule_entry default_appraise_rules[] = {
 
 static LIST_HEAD(ima_default_rules);
 static LIST_HEAD(ima_policy_rules);
+static LIST_HEAD(ima_active_rules);
 struct list_head *ima_rules;
 static bool path_rules;
 
 static DEFINE_MUTEX(ima_rules_mutex);
+
+static void ima_do_delete_rules(struct list_head *rules);
 
 static int ima_policy __initdata;
 static int __init default_measure_policy_setup(char *str)
@@ -421,7 +424,14 @@ bool ima_default_policy(void)
  */
 void ima_update_policy(void)
 {
-	ima_rules = &ima_policy_rules;
+	if (ima_default_policy()) {
+		/* set new policy head */
+		ima_rules = &ima_active_rules;
+	} else {
+		/* FIXME: must be protected by lock */
+		ima_do_delete_rules(ima_rules);
+	}
+	list_replace_init(&ima_policy_rules, ima_rules);
 	ima_update_policy_flag();
 }
 
@@ -909,14 +919,14 @@ ssize_t ima_parse_add_rule(char *rule)
 	return len;
 }
 
-/* ima_delete_rules called to cleanup invalid policy */
-void ima_delete_rules(void)
+/* ima_delete_rules called to cleanup invalid or old policy */
+static void ima_do_delete_rules(struct list_head *rules)
 {
 	struct ima_rule_entry *entry, *tmp;
 	int i;
 
 	mutex_lock(&ima_rules_mutex);
-	list_for_each_entry_safe(entry, tmp, &ima_policy_rules, list) {
+	list_for_each_entry_safe(entry, tmp, rules, list) {
 		for (i = 0; i < MAX_LSM_RULES; i++)
 			kfree(entry->lsm[i].args_p);
 
@@ -924,4 +934,9 @@ void ima_delete_rules(void)
 		kfree(entry);
 	}
 	mutex_unlock(&ima_rules_mutex);
+}
+
+void ima_delete_rules(void)
+{
+	ima_do_delete_rules(&ima_policy_rules);
 }
