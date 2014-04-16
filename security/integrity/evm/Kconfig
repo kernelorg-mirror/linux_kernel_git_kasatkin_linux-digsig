@@ -59,3 +59,26 @@ config EVM_X509_PATH
 	default "/etc/keys/x509_evm.der"
 	help
 	   This option defines X509 certificate path.
+
+config EVM_LOAD_KEY
+	bool "Load EVM HMAC key from the kernel"
+	depends on EVM
+	select INTEGRITY_FILE_READ
+	default n
+	help
+	   This option enables EVM HMAC key loading from the kernel.
+	   It enables EVM.
+
+config EVM_KEY_PATH
+	string "EVM HMAC key path"
+	depends on EVM_LOAD_KEY
+	default "/etc/ima/evm-key"
+	help
+	   This option defines EVM HMAC key path.
+
+config EVM_KMK_PATH
+	string "EVM master key path"
+	depends on EVM_LOAD_KEY
+	default "/etc/ima/evm-kmk"
+	help
+	   This option defines EVM master key path.

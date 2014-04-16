@@ -62,6 +62,14 @@ static int __init evm_set_fixmode(char *str)
 }
 __setup("evm=", evm_set_fixmode);
 
+static int evm_load;
+static int __init evm_load_setup(char *str)
+{
+	evm_load = 1;
+	return 0;
+}
+__setup("evm_load", evm_load_setup);
+
 static void __init evm_init_config(void)
 {
 #ifdef CONFIG_EVM_ATTR_FSUUID
@@ -513,16 +521,22 @@ out:
 }
 EXPORT_SYMBOL_GPL(evm_inode_init_security);
 
-#ifdef CONFIG_EVM_LOAD_X509
-void __init evm_load_x509(void)
+void __init evm_load_keys(void)
 {
 	int rc;
 
+	rc = 0; /* suppress unused warning */
+
+#ifdef CONFIG_EVM_LOAD_X509
 	rc = integrity_load_x509(INTEGRITY_KEYRING_EVM, CONFIG_EVM_X509_PATH);
 	if (!rc)
 		evm_initialized |= EVM_INIT_X509;
-}
 #endif
+#ifdef CONFIG_EVM_LOAD_KEY
+	if (evm_load)
+		evm_load_key(CONFIG_EVM_KEY_PATH, CONFIG_EVM_KMK_PATH);
+#endif
+}
 
 static int __init init_evm(void)
 {

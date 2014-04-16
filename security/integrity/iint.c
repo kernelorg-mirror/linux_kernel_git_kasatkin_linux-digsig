@@ -265,5 +265,5 @@ out_fput:
 void __init integrity_load_keys(void)
 {
 	ima_load_x509();
-	evm_load_x509();
+	evm_load_keys();
 }

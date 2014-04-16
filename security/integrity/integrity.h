@@ -188,10 +188,10 @@ static inline void ima_load_x509(void)
 }
 #endif
 
-#ifdef CONFIG_EVM_LOAD_X509
-void __init evm_load_x509(void);
+#ifdef CONFIG_EVM
+void __init evm_load_keys(void);
 #else
-static inline void evm_load_x509(void)
+static inline void evm_load_keys(void)
 {
 }
 #endif
