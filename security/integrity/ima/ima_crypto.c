@@ -478,13 +478,13 @@ static int ima_calc_field_array_hash_tfm(struct ima_field_data *field_data,
 		u8 *data_to_hash = field_data[i].data;
 		u32 datalen = field_data[i].len;
 
-		if (strcmp(td->name, IMA_TEMPLATE_IMA_NAME) != 0) {
+		if (td && strcmp(td->name, IMA_TEMPLATE_IMA_NAME) != 0) {
 			rc = crypto_shash_update(shash,
 						(const u8 *) &field_data[i].len,
 						sizeof(field_data[i].len));
 			if (rc)
 				break;
-		} else if (strcmp(td->fields[i]->field_id, "n") == 0) {
+		} else if (td && strcmp(td->fields[i]->field_id, "n") == 0) {
 			memcpy(buffer, data_to_hash, datalen);
 			data_to_hash = buffer;
 			datalen = IMA_EVENT_NAME_LEN_MAX + 1;
@@ -517,6 +517,13 @@ int ima_calc_field_array_hash(struct ima_field_data *field_data,
 	ima_free_tfm(tfm);
 
 	return rc;
+}
+
+int ima_calc_buffer_hash(const void *buf, int len, struct ima_digest_data *hash)
+{
+	struct ima_field_data fd = { .data = (u8 *)buf, .len = len };
+
+	return ima_calc_field_array_hash(&fd, NULL, 1, hash);
 }
 
 static void __init ima_pcrread(int idx, u8 *pcr)
