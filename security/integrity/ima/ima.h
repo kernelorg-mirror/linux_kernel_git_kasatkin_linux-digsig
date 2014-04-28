@@ -140,6 +140,26 @@ static inline unsigned long ima_hash_key(u8 *digest)
 	return hash_long(*digest, IMA_HASH_BITS);
 }
 
+/* flags definitions */
+#define IMA_FUNC        0x0001
+#define IMA_MASK        0x0002
+#define IMA_FSMAGIC     0x0004
+#define IMA_UID         0x0008
+#define IMA_FOWNER      0x0010
+#define IMA_FSUUID      0x0020
+#define IMA_INMASK	0x0040
+#define IMA_EUID	0x0080
+#define IMA_PATH	0x0100
+
+#define UNKNOWN         0
+#define MEASURE         0x0001  /* same as IMA_MEASURE */
+#define DONT_MEASURE    0x0002
+#define APPRAISE        0x0004  /* same as IMA_APPRAISE */
+#define DONT_APPRAISE   0x0008
+#define AUDIT           0x0040
+
+extern struct list_head *ima_rules;
+
 /* IMA policy related functions */
 enum ima_hooks { FILE_CHECK = 1, MMAP_CHECK, BPRM_CHECK, MODULE_CHECK,
 		 FIRMWARE_CHECK, POLICY_CHECK, DIR_CHECK, SPECIAL_CHECK,

@@ -180,3 +180,13 @@ config IMA_APPRAISE_DIRECTORIES
 	  This option enables directory integrity appraisal.
 
 	  If unsure, say N.
+
+config IMA_READABLE_POLICY_INTERFACE
+	bool "Readable IMA policy"
+	depends on IMA
+	default n
+	help
+	 Allows to read already loaded IMA policy at runtime through policy
+	 interface.
+
+	 WARNING: Enable this option only if your really need it.

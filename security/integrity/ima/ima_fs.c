@@ -27,6 +27,7 @@
 
 static int valid_policy = 1;
 #define TMPBUFLEN 12
+static const struct seq_operations ima_policy_seqops;
 static ssize_t ima_show_htable_value(char __user *buf, size_t count,
 				     loff_t *ppos, atomic_long_t *val)
 {
@@ -344,9 +345,18 @@ static unsigned long ima_fs_flags;
  */
 static int ima_open_policy(struct inode *inode, struct file *filp)
 {
+#ifndef CONFIG_IMA_READABLE_POLICY_INTERFACE
 	/* No point in being allowed to open it if you aren't going to write */
 	if (!(filp->f_flags & O_WRONLY))
 		return -EACCES;
+#endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
+#ifdef CONFIG_IMA_READABLE_POLICY_INTERFACE
+	if (!(filp->f_flags & O_WRONLY)) {
+		if (!capable(CAP_SYS_ADMIN))
+			return -EPERM;
+		return seq_open(filp, &ima_policy_seqops);
+	}
+#endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
 	if (test_and_set_bit(IMA_FS_BUSY, &ima_fs_flags))
 		return -EBUSY;
 	if (!ima_default_policy()) {
@@ -382,13 +392,21 @@ static void ima_check_policy(void)
 
 static int ima_release_policy(struct inode *inode, struct file *file)
 {
+#ifdef CONFIG_IMA_READABLE_POLICY_INTERFACE
+	if (file->f_flags & O_WRONLY)
+		ima_check_policy();
+#else
 	ima_check_policy();
+#endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
 	return 0;
 }
 
 static const struct file_operations ima_measure_policy_ops = {
 	.open = ima_open_policy,
 	.write = ima_write_policy,
+#ifdef CONFIG_IMA_READABLE_POLICY_INTERFACE
+	.read = seq_read,
+#endif
 	.release = ima_release_policy,
 	.llseek = generic_file_llseek,
 };
@@ -438,7 +456,11 @@ int __init ima_fs_init(void)
 		goto out;
 
 	ima_policy = securityfs_create_file("policy",
+#ifndef CONFIG_IMA_READABLE_POLICY_INTERFACE
 					    S_IWUSR,
+#else
+					    S_IWUSR | S_IRUSR,
+#endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
 					    ima_dir, NULL,
 					    &ima_measure_policy_ops);
 	if (IS_ERR(ima_policy))
@@ -454,3 +476,169 @@ out:
 	securityfs_remove(ima_policy);
 	return -1;
 }
+
+#ifdef CONFIG_IMA_READABLE_POLICY_INTERFACE
+static void *ima_policy_start(struct seq_file *m, loff_t *pos)
+{
+	loff_t l = *pos;
+	struct ima_rule_entry *entry;
+
+	rcu_read_lock();
+	list_for_each_entry_rcu(entry, ima_rules, list) {
+		if (!l--) {
+			rcu_read_unlock();
+			return entry;
+		}
+	}
+	rcu_read_unlock();
+	return NULL;
+}
+
+static void *ima_policy_next(struct seq_file *m, void *v, loff_t *pos)
+{
+	struct ima_rule_entry *entry = v;
+
+	rcu_read_lock();
+	entry = list_entry_rcu(entry->list.next, struct ima_rule_entry, list);
+	rcu_read_unlock();
+	(*pos)++;
+
+	return (&entry->list == ima_rules) ? NULL : entry;
+}
+
+static void ima_policy_stop(struct seq_file *m, void *v)
+{
+}
+
+static int ima_policy_show(struct seq_file *m, void *v)
+{
+	struct ima_rule_entry *entry = v;
+	int i = 0;
+
+	rcu_read_lock();
+
+	if (entry->action & MEASURE)
+		seq_puts(m, "measure");
+	if (entry->action & DONT_MEASURE)
+		seq_puts(m, "dont_measure");
+	if (entry->action & APPRAISE)
+		seq_puts(m, "appraise");
+	if (entry->action & DONT_APPRAISE)
+		seq_puts(m, "dont_appraise");
+	if (entry->action & AUDIT)
+		seq_puts(m, "audit");
+
+	seq_puts(m, " ");
+
+	if (entry->flags & IMA_FUNC) {
+		seq_puts(m, "func=");
+		switch (entry->func) {
+		case MMAP_CHECK:
+			seq_puts(m, "MMAP_CHECK");
+			break;
+		case BPRM_CHECK:
+			seq_puts(m, "BPRM_CHECK");
+			break;
+		case MODULE_CHECK:
+			seq_puts(m, "MODULE_CHECK");
+			break;
+		case FILE_CHECK:
+			seq_puts(m, "FILE_CHECK");
+			break;
+		default:
+			seq_printf(m, "%d", entry->func);
+			break;
+		}
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_MASK) {
+		seq_puts(m, "mask=");
+		if (entry->mask & MAY_EXEC)
+			seq_puts(m, "MAY_EXEC");
+		if (entry->mask & MAY_WRITE)
+			seq_puts(m, "MAY_WRITE");
+		if (entry->mask & MAY_READ)
+			seq_puts(m, "MAY_READ");
+		if (entry->mask & MAY_APPEND)
+			seq_puts(m, "MAY_APPEND");
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_FSMAGIC) {
+		seq_printf(m, "fsmagic=0x%lx", entry->fsmagic);
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_FSUUID) {
+		seq_puts(m, "fsuuid=");
+		for (i = 0; i < ARRAY_SIZE(entry->fsuuid); ++i) {
+			switch (i) {
+			case 4:
+			case 6:
+			case 8:
+			case 10:
+				seq_puts(m, "-");
+			}
+			seq_printf(m, "%x", entry->fsuuid[i]);
+		}
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_UID) {
+		seq_printf(m, "uid=%d", __kuid_val(entry->uid));
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_FOWNER) {
+		seq_printf(m, "fowner=%d", __kuid_val(entry->fowner));
+		seq_puts(m, " ");
+	}
+
+	if (entry->flags & IMA_PATH) {
+		seq_printf(m, "path=%s", entry->path);
+		seq_puts(m, " ");
+	}
+
+	for (i = 0; i < MAX_LSM_RULES; i++) {
+		if (entry->lsm[i].rule) {
+			switch (i) {
+			case LSM_OBJ_USER:
+				seq_printf(m, "obj_user=%s ",
+					(char *)entry->lsm[i].args_p);
+				break;
+			case LSM_OBJ_ROLE:
+				seq_printf(m, "obj_role=%s ",
+					(char *)entry->lsm[i].args_p);
+				break;
+			case LSM_OBJ_TYPE:
+				seq_printf(m, "obj_type=%s",
+					(char *)entry->lsm[i].args_p);
+				break;
+			case LSM_SUBJ_USER:
+				seq_printf(m, "subj_user=%s ",
+					(char *)entry->lsm[i].args_p);
+				break;
+			case LSM_SUBJ_ROLE:
+				seq_printf(m, "subj_role=%s ",
+					(char *)entry->lsm[i].args_p);
+				break;
+			case LSM_SUBJ_TYPE:
+				seq_printf(m, "subj_type=%s",
+					(char *)entry->lsm[i].args_p);
+				break;
+			}
+		}
+	}
+	rcu_read_unlock();
+	seq_puts(m, "\n");
+	return 0;
+}
+
+static const struct seq_operations ima_policy_seqops = {
+	.start = ima_policy_start,
+	.next = ima_policy_next,
+	.stop = ima_policy_stop,
+	.show = ima_policy_show,
+};
+#endif /* CONFIG_IMA_READABLE_POLICY_INTERFACE */
