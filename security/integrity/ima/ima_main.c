@@ -116,20 +116,23 @@ static void ima_check_last_writer(struct integrity_iint_cache *iint,
 				  struct inode *inode, struct file *file)
 {
 	fmode_t mode = file->f_mode;
+	bool update;
 
 	if (!(mode & FMODE_WRITE))
 		return;
 
-	mutex_lock(&inode->i_mutex);
+	mutex_lock(&iint->mutex);
 	if (atomic_read(&inode->i_writecount) == 1) {
+		update = test_and_clear_bit(IMA_UPDATE_XATTR,
+					    &iint->atomic_flags);
 		if ((iint->version != inode->i_version) ||
 		    (iint->flags & IMA_NEW_FILE)) {
 			iint->flags &= ~(IMA_DONE_MASK | IMA_NEW_FILE);
-			if (iint->flags & IMA_APPRAISE)
+			if (update)
 				ima_update_xattr(iint, file);
 		}
 	}
-	mutex_unlock(&inode->i_mutex);
+	mutex_unlock(&iint->mutex);
 }
 
 /**
@@ -161,7 +164,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	struct ima_template_desc *template_desc;
 	char *pathbuf = NULL;
 	const char *pathname = NULL;
-	int rc = -ENOMEM, action, must_appraise;
+	int rc = 0, action, must_appraise = 0;
 	struct evm_ima_xattr_data *xattr_value = NULL, **xattr_ptr = NULL;
 	int xattr_len = 0;
 	bool violation_check;
@@ -190,17 +193,31 @@ static int process_measurement(struct file *file, int mask, int function,
 	if (action) {
 		iint = integrity_inode_get(inode);
 		if (!iint)
-			goto out;
+			rc = -ENOMEM;
 	}
 
-	if (violation_check) {
+	if (!rc && violation_check)
 		ima_rdwr_violation_check(file, iint, action & IMA_MEASURE,
 					 &pathbuf, &pathname);
-		if (!action) {
-			rc = 0;
-			goto out_free;
-		}
-	}
+
+	mutex_unlock(&inode->i_mutex);
+
+	if (rc)
+		goto out;
+	if (!action)
+		goto out;
+
+	mutex_lock(&iint->mutex);
+
+	if (test_and_clear_bit(IMA_CHANGE_ATTR, &iint->atomic_flags))
+		/* reset appraisal flags if ima_inode_post_setattr was called */
+		iint->flags &= ~(IMA_APPRAISE | IMA_APPRAISED |
+				 IMA_APPRAISE_SUBMASK | IMA_APPRAISED_SUBMASK |
+				 IMA_ACTION_FLAGS);
+
+	if (test_and_clear_bit(IMA_CHANGE_XATTR, &iint->atomic_flags))
+		/* reset all flags if ima_inode_setxattr was called */
+		iint->flags &= ~IMA_DONE_MASK;
 
 	/* Determine if already appraised/measured based on bitmask
 	 * (IMA_MEASURE, IMA_MEASURED, IMA_XXXX_APPRAISE, IMA_XXXX_APPRAISED,
@@ -214,7 +231,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	if (!action) {
 		if (must_appraise)
 			rc = ima_get_cache_status(iint, function);
-		goto out_digsig;
+		goto out_locked;
 	}
 
 	template_desc = ima_template_desc_current();
@@ -226,7 +243,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	if (rc != 0) {
 		if (file->f_flags & O_DIRECT)
 			rc = (iint->flags & IMA_PERMIT_DIRECTIO) ? 0 : -EACCES;
-		goto out_digsig;
+		goto out_locked;
 	}
 
 	if (!pathname)	/* ima_rdwr_violation possibly pre-fetched */
@@ -235,23 +252,28 @@ static int process_measurement(struct file *file, int mask, int function,
 	if (action & IMA_MEASURE)
 		ima_store_measurement(iint, file, pathname,
 				      xattr_value, xattr_len);
-	if (action & IMA_APPRAISE_SUBMASK)
+	if (action & IMA_APPRAISE_SUBMASK) {
+		mutex_lock(&inode->i_mutex);
 		rc = ima_appraise_measurement(function, iint, file, pathname,
 					      xattr_value, xattr_len, opened);
+		mutex_unlock(&inode->i_mutex);
+	}
 	if (action & IMA_AUDIT)
 		ima_audit_measurement(iint, pathname);
-
-out_digsig:
-	if ((mask & MAY_WRITE) && (iint->flags & IMA_DIGSIG))
+out_locked:
+	if ((mask & MAY_WRITE) && test_bit(IMA_DIGSIG, &iint->atomic_flags))
 		rc = -EACCES;
+	mutex_unlock(&iint->mutex);
 	kfree(xattr_value);
-out_free:
+out:
 	if (pathbuf)
 		__putname(pathbuf);
-out:
-	mutex_unlock(&inode->i_mutex);
-	if ((rc && must_appraise) && (ima_appraise & IMA_APPRAISE_ENFORCE))
-		return -EACCES;
+	if (must_appraise) {
+		if (rc && (ima_appraise & IMA_APPRAISE_ENFORCE))
+			return -EACCES;
+		if (file->f_mode & FMODE_WRITE)
+			set_bit(IMA_UPDATE_XATTR, &iint->atomic_flags);
+	}
 	return 0;
 }
 
