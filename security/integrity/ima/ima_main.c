@@ -164,7 +164,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	struct ima_template_desc *template_desc;
 	char *pathbuf = NULL;
 	const char *pathname = NULL;
-	int rc = 0, action, must_appraise = 0;
+	int rc = 0, action, must_appraise = 0, appraise_permit;
 	struct evm_ima_xattr_data *xattr_value = NULL;
 	int xattr_len = 0;
 	bool violation_check;
@@ -187,6 +187,7 @@ static int process_measurement(struct file *file, int mask, int function,
 		return 0;
 
 	must_appraise = action & IMA_APPRAISE;
+	appraise_permit = action & IMA_APPRAISE_PERMIT;
 
 	/*  Is the appraise rule hook specific?  */
 	if (action & IMA_FILE_APPRAISE)
@@ -279,7 +280,8 @@ out:
 	if (must_appraise) {
 		if (iint->flags & IMA_DROP_CAPS)
 			iint->cap_permitted = ctx.appraise->cap_permitted;
-		if (rc && (ima_appraise & IMA_APPRAISE_ENFORCE))
+		if (rc && (ima_appraise & IMA_APPRAISE_ENFORCE) &&
+		    !appraise_permit)
 			return -EACCES;
 		if (file->f_mode & FMODE_WRITE)
 			set_bit(IMA_UPDATE_XATTR, &iint->atomic_flags);
