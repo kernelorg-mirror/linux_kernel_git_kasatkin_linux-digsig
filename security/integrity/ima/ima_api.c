@@ -315,9 +315,12 @@ void ima_audit_measurement(struct integrity_iint_cache *iint,
 const char *ima_d_path(struct path *path, char **pathbuf)
 {
 	char *pathname = NULL;
+	struct dentry *dentry = path->dentry;
 
-	if (!path->mnt)
+	if (!dentry)
 		return NULL;
+	if (!path->mnt)
+		goto out;
 
 	*pathbuf = __getname();
 	if (*pathbuf) {
@@ -328,7 +331,8 @@ const char *ima_d_path(struct path *path, char **pathbuf)
 			pathname = NULL;
 		}
 	}
-	return pathname ?: (const char *)path->dentry->d_name.name;
+out:
+	return pathname ?: (const char *)dentry->d_name.name;
 }
 
 static int prepend(char **buffer, int buflen, const char *str, int namelen)
