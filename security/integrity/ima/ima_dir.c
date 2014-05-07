@@ -184,6 +184,7 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 	int rc = 0, action, xattr_len = 0, func = DIR_CHECK;
 	struct evm_ima_xattr_data *xattr_value = NULL;
 	enum hash_algo algo;
+	int permit;
 
 	if (!ima_dir_enabled || !ima_initialized)
 		return 0;
@@ -193,6 +194,7 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 		iint = integrity_iint_find(inode);
 		BUG_ON(!iint);
 
+		permit = iint->flags & IMA_APPRAISE_PERMIT;
 		action = iint->flags & IMA_DO_MASK;
 		action &= ~((iint->flags & IMA_DONE_MASK) >> 1);
 
@@ -214,6 +216,8 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 			return -ECHILD;
 		if (action < 0)
 			return action;
+
+		permit = action & IMA_APPRAISE_PERMIT;
 
 		mutex_lock(&inode->i_mutex);
 
@@ -248,8 +252,8 @@ static int dir_measurement(struct path *path, struct file *file, int mask)
 out_locked:
 	mutex_unlock(&inode->i_mutex);
 out_unlocked:
-	if (ima_appraise & IMA_APPRAISE_ENFORCE)
-		return rc ? -EACCES : 0;
+	if (rc && (ima_appraise & IMA_APPRAISE_ENFORCE) && !permit)
+		return -EACCES;
 	return 0;
 }
 
