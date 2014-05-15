@@ -35,7 +35,7 @@ static struct ima_template_field supported_fields[] = {
 	{.field_id = "n-ng", .field_init = ima_eventname_ng_init,
 	 .field_show = ima_show_template_string},
 	{.field_id = "sig", .field_init = ima_eventsig_init,
-	 .field_show = ima_show_template_sig},
+	 .field_show = ima_show_template_hex},
 };
 
 static struct ima_template_desc *ima_template;

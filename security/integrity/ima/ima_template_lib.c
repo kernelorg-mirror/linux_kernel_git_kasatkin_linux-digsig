@@ -85,7 +85,7 @@ static void ima_show_template_data_ascii(struct seq_file *m,
 	case DATA_FMT_HEX:
 		if (!buflen)
 			break;
-		ima_print_digest(m, buf_ptr, buflen);
+		ima_print_hex(m, buf_ptr, buflen);
 		break;
 	case DATA_FMT_STRING:
 		seq_printf(m, "%s", buf_ptr);
@@ -150,7 +150,7 @@ void ima_show_template_string(struct seq_file *m, enum ima_show_type show,
 	ima_show_template_field_data(m, show, DATA_FMT_STRING, field_data);
 }
 
-void ima_show_template_sig(struct seq_file *m, enum ima_show_type show,
+void ima_show_template_hex(struct seq_file *m, enum ima_show_type show,
 			   struct ima_field_data *field_data)
 {
 	ima_show_template_field_data(m, show, DATA_FMT_HEX, field_data);
