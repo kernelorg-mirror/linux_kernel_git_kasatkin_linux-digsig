@@ -403,6 +403,11 @@ void __init ima_init_policy(void)
 	ima_rules = &ima_default_rules;
 }
 
+bool ima_default_policy(void)
+{
+	return ima_rules == &ima_default_rules;
+}
+
 /**
  * ima_update_policy - update default_rules with new measure rules
  *

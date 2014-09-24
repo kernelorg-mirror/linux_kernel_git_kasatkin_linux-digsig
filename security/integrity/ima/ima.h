@@ -192,6 +192,7 @@ int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask,
 void ima_init_policy(void);
 void ima_update_policy(void);
 void ima_update_policy_flag(void);
+bool ima_default_policy(void);
 ssize_t ima_parse_add_rule(char *);
 void ima_delete_rules(void);
 

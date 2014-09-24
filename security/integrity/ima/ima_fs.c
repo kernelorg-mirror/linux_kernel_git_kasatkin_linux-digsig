@@ -349,6 +349,10 @@ static int ima_open_policy(struct inode *inode, struct file *filp)
 		return -EACCES;
 	if (test_and_set_bit(IMA_FS_BUSY, &ima_fs_flags))
 		return -EBUSY;
+	if (!ima_default_policy()) {
+		clear_bit(IMA_FS_BUSY, &ima_fs_flags);
+		return -EACCES;
+	}
 	return 0;
 }
 
@@ -370,12 +374,10 @@ static int ima_release_policy(struct inode *inode, struct file *file)
 	if (!valid_policy) {
 		ima_delete_rules();
 		valid_policy = 1;
-		clear_bit(IMA_FS_BUSY, &ima_fs_flags);
-		return 0;
+	} else {
+		ima_update_policy();
 	}
-	ima_update_policy();
-	securityfs_remove(ima_policy);
-	ima_policy = NULL;
+	clear_bit(IMA_FS_BUSY, &ima_fs_flags);
 	return 0;
 }
 
