@@ -82,3 +82,13 @@ config EVM_KMK_PATH
 	default "/etc/ima/evm-kmk"
 	help
 	   This option defines EVM master key path.
+
+config EVM_STATE_INTERFACE
+	boolean "EVM state interface"
+	depends on EVM
+	default n
+	help
+	  Creates the EVM state interface and makes possible change EVM
+	  state in runtime.
+
+	  WARNING: Enable this option only if you really need it.

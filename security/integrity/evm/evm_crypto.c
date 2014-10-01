@@ -59,6 +59,7 @@ int evm_set_key(void *key, size_t keylen)
 		goto inval;
 	memcpy(evmkey, key, keylen);
 	evm_initialized |= EVM_INIT_HMAC;
+	evm_enabled = evm_fixmode ? EVM_STATE_FIX : EVM_STATE_ENABLED;
 	pr_info("key initialized\n");
 	return 0;
 inval:

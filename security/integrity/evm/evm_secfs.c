@@ -29,6 +29,18 @@ static struct dentry *evm_init_tpm;
  * @count: maximum to send along
  * @ppos: where to start
  *
+ * If EVM_STATE_INTERFACE is enabled this should write to the userspace:
+ * 0 - when EVM is disabled or uninitialized
+ * 1 - when EVM is in enforce mode (initialized and enabled)
+ * 2 - when EVM is in FIX mode (initialized and fix)
+ * To use this interface user needs to have CAP_SYS_ADMIN
+ * Notice that the param "evm=fix" has higher priority, and if it was passed
+ * to the kernel then EVM will be running in FIX mode (or will be disabled).
+ *
+ * If EVM_STATE_INTERFACE is disabled it writes:
+ * 0 - when EVM is uninitialized
+ * 1 - when EVM is initialized
+ *
  * Returns number of bytes read or error code, as appropriate
  */
 static ssize_t evm_read_key(struct file *filp, char __user *buf,
@@ -36,11 +48,16 @@ static ssize_t evm_read_key(struct file *filp, char __user *buf,
 {
 	char temp[80];
 	ssize_t rc;
+	int mode = evm_initialized;
 
 	if (*ppos != 0)
 		return 0;
 
-	sprintf(temp, "%d", evm_initialized);
+#ifdef CONFIG_EVM_STATE_INTERFACE
+	mode = evm_enabled;
+#endif
+
+	sprintf(temp, "%d", mode);
 	rc = simple_read_from_buffer(buf, count, ppos, temp, strlen(temp));
 
 	return rc;
@@ -62,9 +79,9 @@ static ssize_t evm_write_key(struct file *file, const char __user *buf,
 			     size_t count, loff_t *ppos)
 {
 	char temp[80];
-	int i;
+	long mode;
 
-	if (!capable(CAP_SYS_ADMIN) || (evm_initialized & EVM_INIT_HMAC))
+	if (!capable(CAP_SYS_ADMIN))
 		return -EPERM;
 
 	if (count >= sizeof(temp) || count == 0)
@@ -75,10 +92,27 @@ static ssize_t evm_write_key(struct file *file, const char __user *buf,
 
 	temp[count] = '\0';
 
-	if ((sscanf(temp, "%d", &i) != 1) || (i != 1))
+	if (kstrtol(temp, 0, &mode))
 		return -EINVAL;
 
+#ifndef CONFIG_EVM_STATE_INTERFACE
+	if (mode != EVM_STATE_ENABLED)
+		return -EINVAL;
+#else
+	if (mode != EVM_STATE_DISABLED &&
+	    mode != EVM_STATE_ENABLED  &&
+	    mode != EVM_STATE_FIX)
+		return -EINVAL;
+#endif
+
 	evm_init_key();
+
+#ifdef CONFIG_EVM_STATE_INTERFACE
+	if (mode && evm_initialized)
+		evm_enabled = evm_fixmode ? EVM_STATE_FIX : mode;
+	else
+		evm_enabled = EVM_STATE_DISABLED;
+#endif
 
 	return count;
 }
@@ -96,5 +130,6 @@ int __init evm_init_secfs(void)
 					      NULL, NULL, &evm_key_ops);
 	if (!evm_init_tpm || IS_ERR(evm_init_tpm))
 		error = -EFAULT;
+
 	return error;
 }

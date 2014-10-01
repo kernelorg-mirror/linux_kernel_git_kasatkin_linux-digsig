@@ -24,7 +24,13 @@
 #define EVM_INIT_HMAC	0x0001
 #define EVM_INIT_X509	0x0002
 
+#define EVM_STATE_DISABLED 0x00
+#define EVM_STATE_ENABLED  0x01
+#define EVM_STATE_FIX      0x02
+
+extern int evm_enabled;
 extern int evm_initialized;
+extern int evm_fixmode;
 extern char *evm_hmac;
 extern char *evm_hash;
 
