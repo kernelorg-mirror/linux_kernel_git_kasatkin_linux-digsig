@@ -324,7 +324,10 @@ const char *ima_d_path(struct path *path, char **pathbuf)
 
 	*pathbuf = __getname();
 	if (*pathbuf) {
-		pathname = d_absolute_path(path, *pathbuf, PATH_MAX);
+		if (S_ISFIFO(dentry->d_inode->i_mode))
+			pathname = d_path(path, *pathbuf, PATH_MAX);
+		else
+			pathname = d_absolute_path(path, *pathbuf, PATH_MAX);
 		if (IS_ERR(pathname)) {
 			__putname(*pathbuf);
 			*pathbuf = NULL;
