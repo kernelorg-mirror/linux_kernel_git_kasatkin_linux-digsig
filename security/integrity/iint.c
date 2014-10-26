@@ -225,6 +225,10 @@ int __init integrity_read_file(const char *path, char **data)
 		return rc;
 	}
 
+	rc = deny_write_access(file);
+	if (rc)
+		goto out_fput;
+
 	size = i_size_read(file_inode(file));
 	if (size <= 0)
 		goto out;
@@ -243,6 +247,8 @@ int __init integrity_read_file(const char *path, char **data)
 	else
 		*data = buf;
 out:
+	allow_write_access(file);
+out_fput:
 	fput(file);
 	return rc;
 }
