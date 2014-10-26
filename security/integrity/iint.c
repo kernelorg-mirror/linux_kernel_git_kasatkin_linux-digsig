@@ -21,6 +21,7 @@
 #include <linux/rbtree.h>
 #include <linux/file.h>
 #include <linux/uaccess.h>
+#include <linux/ima.h>
 #include "integrity.h"
 
 static struct rb_root integrity_iint_tree = RB_ROOT;
@@ -226,6 +227,10 @@ int integrity_read_file(const char *path, char **data)
 	rc = deny_write_access(file);
 	if (rc)
 		goto out_fput;
+
+	rc = ima_policy_check(file);
+	if (rc)
+		goto out;
 
 	size = i_size_read(file_inode(file));
 	if (size <= 0)

@@ -368,6 +368,11 @@ int ima_fw_from_file(struct file *file, char *buf, size_t size)
 	return process_measurement(file, MAY_EXEC, FIRMWARE_CHECK, 0);
 }
 
+int ima_policy_check(struct file *file)
+{
+	return process_measurement(file, MAY_READ, POLICY_CHECK, 0);
+}
+
 static int __init init_ima(void)
 {
 	int error;
