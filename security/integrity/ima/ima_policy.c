@@ -39,29 +39,7 @@
 
 int ima_policy_flag;
 
-#define MAX_LSM_RULES 6
-enum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,
-	LSM_SUBJ_USER, LSM_SUBJ_ROLE, LSM_SUBJ_TYPE
-};
-
 enum policy_types { ORIGINAL_TCB = 1, DEFAULT_TCB };
-
-struct ima_rule_entry {
-	struct list_head list;
-	int action;
-	unsigned int flags;
-	enum ima_hooks func;
-	int mask;
-	unsigned long fsmagic;
-	u8 fsuuid[16];
-	kuid_t uid;
-	kuid_t fowner;
-	struct {
-		void *rule;	/* LSM file metadata specific */
-		void *args_p;	/* audit value */
-		int type;	/* audit type */
-	} lsm[MAX_LSM_RULES];
-};
 
 /*
  * Without LSM specific knowledge, the default policy can only be
@@ -331,7 +309,7 @@ static int get_subaction(struct ima_rule_entry *rule, int func)
  * change.)
  */
 int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask,
-		     int flags)
+		     int flags, struct ima_action_context *ctx)
 {
 	struct ima_rule_entry *entry;
 	int action = 0, actmask = flags | (flags << 1);
@@ -347,8 +325,11 @@ int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask,
 		action |= entry->flags & IMA_ACTION_FLAGS;
 
 		action |= entry->action & IMA_DO_MASK;
-		if (entry->action & IMA_APPRAISE)
+		if (entry->action & IMA_APPRAISE) {
 			action |= get_subaction(entry, func);
+			if (ctx)
+				ctx->appraise = entry; /* appraise rule */
+		}
 
 		if (entry->action & IMA_DO_MASK)
 			actmask &= ~(entry->action | entry->action << 1);
@@ -444,7 +425,8 @@ enum {
 	Opt_subj_user, Opt_subj_role, Opt_subj_type,
 	Opt_func, Opt_mask, Opt_fsmagic,
 	Opt_uid, Opt_euid, Opt_fowner,
-	Opt_appraise_type, Opt_fsuuid, Opt_permit_directio
+	Opt_appraise_type, Opt_fsuuid, Opt_permit_directio,
+	Opt_cap_drop
 };
 
 static match_table_t policy_tokens = {
@@ -468,6 +450,7 @@ static match_table_t policy_tokens = {
 	{Opt_fowner, "fowner=%s"},
 	{Opt_appraise_type, "appraise_type=%s"},
 	{Opt_permit_directio, "permit_directio"},
+	{Opt_cap_drop, "cap_drop=%s"},
 	{Opt_err, NULL}
 };
 
@@ -501,6 +484,82 @@ static void ima_log_string(struct audit_buffer *ab, char *key, char *value)
 	audit_log_format(ab, "%s=", key);
 	audit_log_untrustedstring(ab, value);
 	audit_log_format(ab, " ");
+}
+
+#define CAPNAME(name)	[name] = #name
+
+static const char *const cap_names[CAP_LAST_CAP + 1] = {
+	CAPNAME(CAP_CHOWN),
+	CAPNAME(CAP_DAC_OVERRIDE),
+	CAPNAME(CAP_DAC_READ_SEARCH),
+	CAPNAME(CAP_FOWNER),
+	CAPNAME(CAP_FSETID),
+	CAPNAME(CAP_KILL),
+	CAPNAME(CAP_SETGID),
+	CAPNAME(CAP_SETUID),
+	CAPNAME(CAP_SETPCAP),
+	CAPNAME(CAP_LINUX_IMMUTABLE),
+	CAPNAME(CAP_NET_BIND_SERVICE),
+	CAPNAME(CAP_NET_BROADCAST),
+	CAPNAME(CAP_NET_ADMIN),
+	CAPNAME(CAP_NET_RAW),
+	CAPNAME(CAP_IPC_LOCK),
+	CAPNAME(CAP_IPC_OWNER),
+	CAPNAME(CAP_SYS_MODULE),
+	CAPNAME(CAP_SYS_RAWIO),
+	CAPNAME(CAP_SYS_CHROOT),
+	CAPNAME(CAP_SYS_PTRACE),
+	CAPNAME(CAP_SYS_PACCT),
+	CAPNAME(CAP_SYS_ADMIN),
+	CAPNAME(CAP_SYS_BOOT),
+	CAPNAME(CAP_SYS_NICE),
+	CAPNAME(CAP_SYS_RESOURCE),
+	CAPNAME(CAP_SYS_TIME),
+	CAPNAME(CAP_SYS_TTY_CONFIG),
+	CAPNAME(CAP_MKNOD),
+	CAPNAME(CAP_LEASE),
+	CAPNAME(CAP_AUDIT_WRITE),
+	CAPNAME(CAP_AUDIT_CONTROL),
+	CAPNAME(CAP_SETFCAP),
+	CAPNAME(CAP_MAC_OVERRIDE),
+	CAPNAME(CAP_MAC_ADMIN),
+	CAPNAME(CAP_SYSLOG),
+	CAPNAME(CAP_WAKE_ALARM),
+	CAPNAME(CAP_BLOCK_SUSPEND)
+};
+
+static int ima_parse_cap(struct ima_rule_entry *entry, char *caps)
+{
+	int i;
+	char *cap;
+
+	pr_info("DROP CAPS: %s\n", caps);
+
+	if (!strcasecmp("all", caps)) {
+		/* drop all caps */
+		entry->cap_permitted = CAP_EMPTY_SET;
+		entry->flags |= IMA_DROP_CAPS;
+		return 0;
+	}
+
+	/* start with full set, then drop */
+	entry->cap_permitted = CAP_FULL_SET;
+
+	while ((cap = strsep(&caps, ",:"))) {
+		for (i = 0; i < ARRAY_SIZE(cap_names); i++) {
+			if (!strcasecmp(cap_names[i], cap))
+				break;
+		}
+		if (i == ARRAY_SIZE(cap_names)) {
+			pr_err("error in parsing capability list\n");
+			return -EINVAL;
+		}
+		cap_lower(entry->cap_permitted, i);
+		pr_info("cap_lower: %d\n", i);
+		entry->flags |= IMA_DROP_CAPS;
+	}
+
+	return 0;
 }
 
 static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
@@ -736,6 +795,15 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 		case Opt_permit_directio:
 			entry->flags |= IMA_PERMIT_DIRECTIO;
 			break;
+		case Opt_cap_drop:
+			if (entry->action != APPRAISE) {
+				result = -EINVAL;
+				break;
+			}
+
+			ima_log_string(ab, "cap_drop", args[0].from);
+			result = ima_parse_cap(entry, args[0].from);
+			break;
 		case Opt_err:
 			ima_log_string(ab, "UNKNOWN", p);
 			result = -EINVAL;
@@ -748,6 +816,8 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 		ima_appraise |= IMA_APPRAISE_MODULES;
 	else if (entry->func == FIRMWARE_CHECK)
 		ima_appraise |= IMA_APPRAISE_FIRMWARE;
+	else if (entry->flags & IMA_DROP_CAPS)
+		ima_appraise |= IMA_APPRAISE_DROP_CAPS;
 	audit_log_format(ab, "res=%d", !result);
 	audit_log_end(ab);
 	return result;

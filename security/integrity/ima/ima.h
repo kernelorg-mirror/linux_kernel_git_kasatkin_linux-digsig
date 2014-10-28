@@ -137,8 +137,40 @@ static inline unsigned long ima_hash_key(u8 *digest)
 	return hash_long(*digest, IMA_HASH_BITS);
 }
 
+/* IMA policy related functions */
+enum ima_hooks { FILE_CHECK = 1, MMAP_CHECK, BPRM_CHECK, MODULE_CHECK,
+		 FIRMWARE_CHECK, POLICY_CHECK, POST_SETATTR };
+
+#define MAX_LSM_RULES 6
+enum lsm_rule_types { LSM_OBJ_USER, LSM_OBJ_ROLE, LSM_OBJ_TYPE,
+	LSM_SUBJ_USER, LSM_SUBJ_ROLE, LSM_SUBJ_TYPE
+};
+
+struct ima_rule_entry {
+	struct list_head list;
+	int action;
+	unsigned int flags;
+	enum ima_hooks func;
+	int mask;
+	unsigned long fsmagic;
+	u8 fsuuid[16];
+	kuid_t uid;
+	kuid_t fowner;
+	kernel_cap_t cap_permitted;
+	struct {
+		void *rule;	/* LSM file metadata specific */
+		void *args_p;	/* audit value */
+		int type;	/* audit type */
+	} lsm[MAX_LSM_RULES];
+};
+
+struct ima_action_context {
+	struct ima_rule_entry *appraise;
+};
+
 /* LIM API function definitions */
-int ima_get_action(struct inode *inode, int mask, int function);
+int ima_get_action(struct inode *inode, int mask, int function,
+		   struct ima_action_context *ctx);
 int ima_must_measure(struct inode *inode, int mask, int function);
 int ima_collect_measurement(struct integrity_iint_cache *iint,
 			    struct file *file, enum hash_algo algo);
@@ -155,12 +187,8 @@ int ima_store_template(struct ima_template_entry *entry, int violation,
 void ima_free_template_entry(struct ima_template_entry *entry);
 const char *ima_d_path(struct path *path, char **pathbuf);
 
-/* IMA policy related functions */
-enum ima_hooks { FILE_CHECK = 1, MMAP_CHECK, BPRM_CHECK, MODULE_CHECK,
-		 FIRMWARE_CHECK, POLICY_CHECK, POST_SETATTR };
-
 int ima_match_policy(struct inode *inode, enum ima_hooks func, int mask,
-		     int flags);
+		     int flags, struct ima_action_context *ctx);
 void ima_init_policy(void);
 void ima_update_policy(void);
 void ima_update_policy_flag(void);
@@ -173,6 +201,7 @@ void ima_delete_rules(void);
 #define IMA_APPRAISE_LOG	0x04
 #define IMA_APPRAISE_MODULES	0x08
 #define IMA_APPRAISE_FIRMWARE	0x10
+#define IMA_APPRAISE_DROP_CAPS	0x20
 
 #ifdef CONFIG_IMA_APPRAISE
 int ima_appraise_measurement(int func, struct integrity_iint_cache *iint,

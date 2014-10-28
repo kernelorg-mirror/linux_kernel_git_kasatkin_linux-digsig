@@ -169,6 +169,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	int xattr_len = 0;
 	bool violation_check;
 	enum hash_algo hash_algo;
+	struct ima_action_context ctx;
 
 	if (!ima_policy_flag || !S_ISREG(inode->i_mode))
 		return 0;
@@ -177,7 +178,7 @@ static int process_measurement(struct file *file, int mask, int function,
 	 * bitmask based on the appraise/audit/measurement policy.
 	 * Included is the appraise submask.
 	 */
-	action = ima_get_action(inode, mask, function);
+	action = ima_get_action(inode, mask, function, &ctx);
 	violation_check = ((function == FILE_CHECK || function == MMAP_CHECK) &&
 			   (ima_policy_flag & IMA_MEASURE));
 	if (!action && !violation_check)
@@ -274,6 +275,8 @@ out:
 	if (pathbuf)
 		__putname(pathbuf);
 	if (must_appraise) {
+		if (iint->flags & IMA_DROP_CAPS)
+			iint->cap_permitted = ctx.appraise->cap_permitted;
 		if (rc && (ima_appraise & IMA_APPRAISE_ENFORCE))
 			return -EACCES;
 		if (file->f_mode & FMODE_WRITE)
@@ -300,6 +303,25 @@ int ima_file_mmap(struct file *file, unsigned long prot)
 	return 0;
 }
 
+static void ima_drop_caps(struct linux_binprm *bprm)
+{
+	struct inode *inode = file_inode(bprm->file);
+	struct integrity_iint_cache *iint;
+	struct cred *cred = bprm->cred;
+
+	iint = integrity_iint_find(inode);
+	if (!iint)
+		return;
+
+	if (test_bit(EVM_DIGSIG, &iint->atomic_flags))
+		return; /* don't drop */
+
+	if (iint->flags & IMA_DROP_CAPS)
+		cred->cap_effective = cap_intersect(cred->cap_effective,
+						    iint->cap_permitted);
+}
+
+
 /**
  * ima_bprm_check - based on policy, collect/store measurement.
  * @bprm: contains the linux_binprm structure
@@ -315,7 +337,12 @@ int ima_file_mmap(struct file *file, unsigned long prot)
  */
 int ima_bprm_check(struct linux_binprm *bprm)
 {
-	return process_measurement(bprm->file, MAY_EXEC, BPRM_CHECK, 0);
+	int rc;
+
+	rc = process_measurement(bprm->file, MAY_EXEC, BPRM_CHECK, 0);
+	if (!rc && (ima_appraise & IMA_APPRAISE_DROP_CAPS))
+		ima_drop_caps(bprm);
+	return rc;
 }
 
 /**

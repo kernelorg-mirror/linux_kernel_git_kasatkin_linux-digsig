@@ -32,6 +32,7 @@
 #define IMA_PERMIT_DIRECTIO	0x02000000
 #define IMA_NEW_FILE		0x04000000
 #define EVM_DIGSIG_REQUIRED	0x08000000
+#define IMA_DROP_CAPS		0x10000000
 
 #define IMA_DO_MASK		(IMA_MEASURE | IMA_APPRAISE | IMA_AUDIT | \
 				 IMA_APPRAISE_SUBMASK)
@@ -131,6 +132,7 @@ struct integrity_iint_cache {
 	enum integrity_status ima_policy_status:4;
 	enum integrity_status evm_status:4;
 	struct ima_digest_data *ima_hash;
+	kernel_cap_t cap_permitted;
 };
 
 /* rbtree tree calls to lookup, insert, delete
