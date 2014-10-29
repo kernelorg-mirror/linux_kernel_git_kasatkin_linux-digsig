@@ -265,7 +265,8 @@ static int process_measurement(struct file *file, int mask, int function,
 	if (action & IMA_AUDIT)
 		ima_audit_measurement(iint, pathname);
 out_locked:
-	if ((mask & MAY_WRITE) && test_bit(IMA_DIGSIG, &iint->atomic_flags))
+	if ((mask & MAY_WRITE) && (test_bit(IMA_DIGSIG, &iint->atomic_flags) ||
+				   test_bit(EVM_DIGSIG, &iint->atomic_flags)))
 		rc = -EACCES;
 	mutex_unlock(&iint->mutex);
 	kfree(xattr_value);

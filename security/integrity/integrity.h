@@ -62,6 +62,7 @@
 #define IMA_UPDATE_XATTR	1
 #define IMA_CHANGE_ATTR		2
 #define IMA_DIGSIG		3
+#define EVM_DIGSIG		4
 
 enum evm_ima_xattr_type {
 	IMA_XATTR_DIGEST = 0x01,
@@ -106,6 +107,12 @@ struct signature_v2_hdr {
 	uint16_t sig_size;	/* signature size */
 	uint8_t sig[0];		/* signature payload */
 } __packed;
+
+struct h_misc_digsig {
+	uid_t uid;
+	gid_t gid;
+	umode_t mode;
+};
 
 /* integrity data associated with an inode */
 struct integrity_iint_cache {

@@ -63,6 +63,7 @@ int integrity_digsig_verify(const unsigned int id, const char *sig, int siglen,
 		return digsig_verify(keyring[id], sig + 1, siglen - 1,
 				     digest, digestlen);
 	case 2:
+	case 3:
 		return asymmetric_verify(keyring[id], sig, siglen,
 					 digest, digestlen);
 	}

@@ -28,7 +28,7 @@
 int evm_initialized;
 
 static char *integrity_status_msg[] = {
-	"pass", "fail", "no_label", "no_xattrs", "unknown"
+	"pass", "fail", "no_label", "no_xattrs", "unknown", "pass_digsig"
 };
 char *evm_hmac = "hmac(sha1)";
 char *evm_hash = "sha1";
@@ -115,7 +115,7 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 	struct evm_ima_xattr_data *xattr_data = NULL;
 	struct evm_ima_xattr_data calc;
 	enum integrity_status evm_status = INTEGRITY_PASS;
-	int rc, xattr_len;
+	int rc, xattr_len, version;
 
 	if (iint && iint->evm_status == INTEGRITY_PASS)
 		return iint->evm_status;
@@ -141,6 +141,9 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 
 	xattr_len = rc;
 
+	if (iint)
+		clear_bit(EVM_DIGSIG, &iint->atomic_flags);
+
 	/* check value type */
 	switch (xattr_data->type) {
 	case EVM_XATTR_HMAC:
@@ -155,8 +158,11 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 			rc = -EINVAL;
 		break;
 	case EVM_IMA_XATTR_DIGSIG:
+		version = ((const char *)xattr_data)[1];
 		rc = evm_calc_hmac_or_hash(dentry, xattr_name, xattr_value,
-					   xattr_value_len, IMA_XATTR_DIGEST,
+					   xattr_value_len,
+					   version == 3 ? EVM_IMA_XATTR_DIGSIG :
+							  IMA_XATTR_DIGEST,
 					   calc.digest);
 		if (rc)
 			break;
@@ -164,14 +170,27 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 					(const char *)xattr_data, xattr_len,
 					calc.digest, sizeof(calc.digest));
 		if (!rc) {
+			if (iint)
+				set_bit(EVM_DIGSIG, &iint->atomic_flags);
+			if (version == 3) {
+				/* immutable/unreplaceable signature */
+				if (!iint)
+					/* for evm_verify_current_integrity */
+					evm_status = INTEGRITY_PASS_DIGSIG;
+				goto out;
+			}
 			/* Replace RSA with HMAC if not mounted readonly and
 			 * not immutable
 			 */
 			if (!IS_RDONLY(d_backing_inode(dentry)) &&
-			    !IS_IMMUTABLE(d_backing_inode(dentry)))
+			    !IS_IMMUTABLE(d_backing_inode(dentry))) {
 				evm_update_evmxattr(dentry, xattr_name,
 						    xattr_value,
 						    xattr_value_len);
+				if (iint)
+					clear_bit(EVM_DIGSIG,
+						  &iint->atomic_flags);
+			}
 		}
 		break;
 	default:
@@ -311,7 +330,7 @@ static int evm_protect_xattr(struct dentry *dentry, const char *xattr_name,
 				    -EPERM, 0);
 	}
 out:
-	if (evm_status != INTEGRITY_PASS)
+	if (evm_status != INTEGRITY_PASS && evm_status != INTEGRITY_PASS_DIGSIG)
 		integrity_audit_msg(AUDIT_INTEGRITY_METADATA, d_backing_inode(dentry),
 				    dentry->d_name.name, "appraise_metadata",
 				    integrity_status_msg[evm_status],
@@ -429,9 +448,10 @@ int evm_inode_setattr(struct dentry *dentry, struct iattr *attr)
 	if ((evm_status == INTEGRITY_PASS) ||
 	    (evm_status == INTEGRITY_NOXATTRS))
 		return 0;
-	integrity_audit_msg(AUDIT_INTEGRITY_METADATA, d_backing_inode(dentry),
-			    dentry->d_name.name, "appraise_metadata",
-			    integrity_status_msg[evm_status], -EPERM, 0);
+	if (evm_status != INTEGRITY_PASS_DIGSIG)
+		integrity_audit_msg(AUDIT_INTEGRITY_METADATA, d_backing_inode(dentry),
+				    dentry->d_name.name, "appraise_metadata",
+				    integrity_status_msg[evm_status], -EPERM, 0);
 	return -EPERM;
 }
 

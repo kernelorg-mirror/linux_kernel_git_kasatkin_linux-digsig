@@ -155,6 +155,19 @@ static void hmac_add_misc(struct shash_desc *desc, struct inode *inode,
 	crypto_shash_final(desc, digest);
 }
 
+static void hmac_add_misc_digsig(struct shash_desc *desc, struct inode *inode,
+				 char *digest)
+{
+	struct h_misc_digsig hmac_misc;
+
+	memset(&hmac_misc, 0, sizeof(hmac_misc));
+	hmac_misc.uid = from_kuid(&init_user_ns, inode->i_uid);
+	hmac_misc.gid = from_kgid(&init_user_ns, inode->i_gid);
+	hmac_misc.mode = inode->i_mode;
+	crypto_shash_update(desc, (const u8 *)&hmac_misc, sizeof(hmac_misc));
+	crypto_shash_final(desc, digest);
+}
+
 /*
  * Calculate the HMAC value across the set of protected security xattrs.
  *
@@ -204,7 +217,10 @@ int evm_calc_hmac_or_hash(struct dentry *dentry,
 		xattr_size = size;
 		crypto_shash_update(desc, (const u8 *)xattr_value, xattr_size);
 	}
-	hmac_add_misc(desc, inode, digest);
+	if (type == EVM_IMA_XATTR_DIGSIG)
+		hmac_add_misc_digsig(desc, inode, digest);
+	else
+		hmac_add_misc(desc, inode, digest);
 
 out:
 	kfree(xattr_value);
