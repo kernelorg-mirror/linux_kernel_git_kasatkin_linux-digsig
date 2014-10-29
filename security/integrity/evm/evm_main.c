@@ -147,6 +147,10 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 	/* check value type */
 	switch (xattr_data->type) {
 	case EVM_XATTR_HMAC:
+		if (iint && (iint->flags & EVM_DIGSIG_REQUIRED)) {
+			rc = -EACCES;
+			break;
+		}
 		rc = evm_calc_hmac_or_hash(dentry, xattr_name, xattr_value,
 					   xattr_value_len, EVM_XATTR_HMAC,
 					   calc.digest);
@@ -159,6 +163,8 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 		break;
 	case EVM_IMA_XATTR_DIGSIG:
 		version = ((const char *)xattr_data)[1];
+		if (iint)
+			set_bit(EVM_DIGSIG, &iint->atomic_flags);
 		rc = evm_calc_hmac_or_hash(dentry, xattr_name, xattr_value,
 					   xattr_value_len,
 					   version == 3 ? EVM_IMA_XATTR_DIGSIG :

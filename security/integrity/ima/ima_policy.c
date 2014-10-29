@@ -724,6 +724,8 @@ static int ima_parse_rule(char *rule, struct ima_rule_entry *entry)
 			ima_log_string(ab, "appraise_type", args[0].from);
 			if ((strcmp(args[0].from, "imasig")) == 0)
 				entry->flags |= IMA_DIGSIG_REQUIRED;
+			else if ((strcmp(args[0].from, "evmsig")) == 0)
+				entry->flags |= EVM_DIGSIG_REQUIRED;
 			else
 				result = -EINVAL;
 			break;
