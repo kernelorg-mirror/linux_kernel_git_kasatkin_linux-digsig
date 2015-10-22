@@ -24,9 +24,8 @@
 #include "evm.h"
 
 #define EVMKEY "evm-key"
-#define MAX_KEY_SIZE 128
-static unsigned char evmkey[MAX_KEY_SIZE];
-static int evmkey_len = MAX_KEY_SIZE;
+static unsigned char evmkey[EVM_MAX_KEY_SIZE];
+static int evmkey_len = EVM_MAX_KEY_SIZE;
 
 struct crypto_shash *hmac_tfm;
 struct crypto_shash *hash_tfm;
@@ -54,7 +53,7 @@ int evm_set_key(void *key, size_t keylen)
 	if (test_and_set_bit(EVM_SET_KEY_BUSY, &evm_set_key_flags))
 		goto busy;
 	rc = -EINVAL;
-	if (keylen > MAX_KEY_SIZE)
+	if (keylen < EVM_MIN_KEY_SIZE || keylen > EVM_MAX_KEY_SIZE)
 		goto inval;
 	memcpy(evmkey, key, keylen);
 	evm_initialized |= EVM_INIT_HMAC;
