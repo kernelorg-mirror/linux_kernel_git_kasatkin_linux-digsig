@@ -40,6 +40,8 @@ static struct shash_desc *init_desc(char type)
 	struct shash_desc *desc;
 
 	if (type == EVM_XATTR_HMAC) {
+		if (!(evm_initialized & EVM_INIT_HMAC))
+			return ERR_PTR(-ENOKEY);
 		tfm = &hmac_tfm;
 		algo = evm_hmac;
 	} else {
