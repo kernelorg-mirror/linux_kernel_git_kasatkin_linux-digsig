@@ -11,6 +11,9 @@
 #include <linux/integrity.h>
 #include <linux/xattr.h>
 
+#define EVM_MAX_KEY_SIZE	128
+#define EVM_MIN_KEY_SIZE	64
+
 struct integrity_iint_cache;
 
 #ifdef CONFIG_EVM
