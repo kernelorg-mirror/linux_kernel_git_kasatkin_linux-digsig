@@ -43,12 +43,11 @@ int evm_update_evmxattr(struct dentry *dentry,
 			const char *req_xattr_name,
 			const char *req_xattr_value,
 			size_t req_xattr_value_len);
-int evm_calc_hmac(struct dentry *dentry, const char *req_xattr_name,
-		  const char *req_xattr_value,
-		  size_t req_xattr_value_len, char *digest);
-int evm_calc_hash(struct dentry *dentry, const char *req_xattr_name,
-		  const char *req_xattr_value,
-		  size_t req_xattr_value_len, char *digest);
+int evm_calc_hmac_or_hash(struct dentry *dentry,
+			  const char *req_xattr_name,
+			  const char *req_xattr_value,
+			  size_t req_xattr_value_len,
+			  char type, char *digest);
 int evm_init_hmac(struct inode *inode, const struct xattr *xattr,
 		  char *hmac_val);
 int evm_init_secfs(void);

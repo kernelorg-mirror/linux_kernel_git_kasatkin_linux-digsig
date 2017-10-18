@@ -151,8 +151,9 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 			evm_status = INTEGRITY_FAIL;
 			goto out;
 		}
-		rc = evm_calc_hmac(dentry, xattr_name, xattr_value,
-				   xattr_value_len, calc.digest);
+		rc = evm_calc_hmac_or_hash(dentry, xattr_name, xattr_value,
+					   xattr_value_len, EVM_XATTR_HMAC,
+					   calc.digest);
 		if (rc)
 			break;
 		rc = crypto_memneq(xattr_data->digest, calc.digest,
@@ -161,8 +162,9 @@ static enum integrity_status evm_verify_hmac(struct dentry *dentry,
 			rc = -EINVAL;
 		break;
 	case EVM_IMA_XATTR_DIGSIG:
-		rc = evm_calc_hash(dentry, xattr_name, xattr_value,
-				xattr_value_len, calc.digest);
+		rc = evm_calc_hmac_or_hash(dentry, xattr_name, xattr_value,
+					   xattr_value_len, IMA_XATTR_DIGEST,
+					   calc.digest);
 		if (rc)
 			break;
 		rc = integrity_digsig_verify(INTEGRITY_KEYRING_EVM,
