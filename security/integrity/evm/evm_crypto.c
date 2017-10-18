@@ -18,6 +18,8 @@
 #include <linux/module.h>
 #include <linux/crypto.h>
 #include <linux/xattr.h>
+#include <linux/sched.h>
+#include <linux/cred.h>
 #include <linux/evm.h>
 #include <keys/encrypted-type.h>
 #include <crypto/hash.h>
@@ -309,3 +311,105 @@ int evm_init_key(void)
 	key_put(evm_key);
 	return rc;
 }
+
+#ifdef CONFIG_EVM_LOAD_KEY
+int evm_load_key(const char *key, const char *kmk)
+{
+	key_ref_t key_ref, keyring_ref;
+	char *data, *tdata = NULL, *cmd, *type, ch = '\0';
+	int rc, len;
+	bool trusted = false;
+	loff_t size;
+
+	keyring_ref = make_key_ref(current_cred()->user->uid_keyring, 1);
+
+	rc = kernel_read_file_from_path(key, (void *)&data, &size, 0,
+					READING_X509_CERTIFICATE);
+	if (rc < 0)
+		return rc;
+
+	len = size;
+
+	swap(data[len - 1], ch);
+	if (strstr(data, "trusted"))
+		trusted = true;
+	swap(data[len - 1], ch);
+
+	rc = kernel_read_file_from_path(kmk, (void *)&tdata, &size, 0,
+					READING_X509_CERTIFICATE);
+	if (rc < 0)
+		goto out;
+
+	rc = size;
+
+	/* padd does not like \n - remove it*/
+	if (strchr(tdata, '\n'))
+		rc--;
+
+	if (trusted) {
+		/* we need 'load' keyword */
+		cmd = kmalloc(rc + 5, GFP_KERNEL);
+		if (!cmd)
+			goto out;
+
+		memcpy(cmd, "load ", 5);
+		memcpy(cmd + 5, tdata, rc);
+		rc += 5;
+	} else {
+		cmd = tdata;
+	}
+
+	key_ref = key_create_or_update(keyring_ref,
+					trusted ? "trusted" : "user", "kmk",
+					cmd, rc,
+					((KEY_POS_ALL & ~KEY_POS_SETATTR) |
+					KEY_USR_VIEW | KEY_USR_READ),
+					KEY_ALLOC_NOT_IN_QUOTA);
+	if (trusted)
+		kfree(cmd);
+	type = trusted ? "trusted" : "user";
+	if (IS_ERR(key_ref)) {
+		rc = PTR_ERR(key_ref);
+		pr_err("problem loading EVM kmk (%s) (%d): %s\n",
+		       type, rc, kmk);
+		goto out;
+	} else {
+		pr_notice("loaded EVM kmk (%s) %d': %s\n",
+			  type, key_ref_to_ptr(key_ref)->serial, kmk);
+		key_ref_put(key_ref);
+	}
+
+	/* padd does not like \n - remove it*/
+	if (strchr(data, '\n'))
+		len--;
+
+	/* we need 'load' keyword */
+	cmd = kmalloc(len + 5, GFP_KERNEL);
+	if (!cmd)
+		goto out;
+
+	memcpy(cmd, "load ", 5);
+	memcpy(cmd + 5, data, len);
+
+	key_ref = key_create_or_update(keyring_ref,
+					"encrypted", EVMKEY, cmd, len + 5,
+					((KEY_POS_ALL & ~KEY_POS_SETATTR) |
+					KEY_USR_VIEW | KEY_USR_READ),
+					KEY_ALLOC_NOT_IN_QUOTA);
+	kfree(cmd);
+	if (IS_ERR(key_ref)) {
+		rc = PTR_ERR(key_ref);
+		pr_err("problem loading EVM key (%d): %s\n", rc, key);
+	} else {
+		pr_notice("loaded EVM key %d': %s\n",
+			  key_ref_to_ptr(key_ref)->serial, key);
+		key_ref_put(key_ref);
+		rc = evm_init_key();
+	}
+
+out:
+	kfree(tdata);
+	kfree(data);
+	return rc;
+}
+#endif

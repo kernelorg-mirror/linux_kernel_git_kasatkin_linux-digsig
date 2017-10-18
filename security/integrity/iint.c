@@ -210,5 +210,5 @@ int integrity_kernel_read(struct file *file, loff_t offset,
 void __init integrity_load_keys(void)
 {
 	ima_load_x509();
-	evm_load_x509();
+	evm_load_keys();
 }
