@@ -271,7 +271,8 @@ static int process_measurement(struct file *file, char *buf, loff_t size,
 		ima_audit_measurement(iint, pathname);
 
 out_locked:
-	if ((mask & MAY_WRITE) && test_bit(IMA_DIGSIG, &iint->atomic_flags) &&
+	if ((mask & MAY_WRITE) && (test_bit(IMA_DIGSIG, &iint->atomic_flags) ||
+				   test_bit(EVM_DIGSIG, &iint->atomic_flags)) &&
 	     !(iint->flags & IMA_NEW_FILE))
 		rc = -EACCES;
 	mutex_unlock(&iint->mutex);

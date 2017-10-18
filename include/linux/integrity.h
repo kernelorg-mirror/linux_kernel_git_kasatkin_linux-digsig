@@ -18,6 +18,7 @@ enum integrity_status {
 	INTEGRITY_NOLABEL,
 	INTEGRITY_NOXATTRS,
 	INTEGRITY_UNKNOWN,
+	INTEGRITY_PASS_DIGSIG,
 };
 
 /* List of EVM protected security xattrs */
