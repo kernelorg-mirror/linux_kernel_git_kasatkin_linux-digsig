@@ -146,6 +146,7 @@ static struct ima_rule_entry default_appraise_rules[] __ro_after_init = {
 	{.action = APPRAISE, .func = POLICY_CHECK,
 	.flags = IMA_FUNC | IMA_DIGSIG_REQUIRED},
 #endif
+#ifndef CONFIG_EVM_LOAD_X509
 #ifndef CONFIG_IMA_APPRAISE_SIGNED_INIT
 	{.action = APPRAISE, .fowner = GLOBAL_ROOT_UID, .fowner_op = &uid_eq,
 	 .flags = IMA_FOWNER},
@@ -153,6 +154,10 @@ static struct ima_rule_entry default_appraise_rules[] __ro_after_init = {
 	/* force signature */
 	{.action = APPRAISE, .fowner = GLOBAL_ROOT_UID, .fowner_op = &uid_eq,
 	 .flags = IMA_FOWNER | IMA_DIGSIG_REQUIRED},
+#endif
+#else
+	{.action = APPRAISE, .fowner = GLOBAL_ROOT_UID, .fowner_op = &uid_eq,
+	 .flags = IMA_FOWNER | EVM_DIGSIG_REQUIRED},
 #endif
 };
 
