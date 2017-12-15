@@ -1064,6 +1064,7 @@ const char *get_link(struct nameidata *nd)
 		while (unlikely(*++res == '/'))
 			;
 	}
+	//error = ima_link_check(inode, res);
 	if (!*res)
 		res = NULL;
 	return res;
@@ -4140,6 +4141,8 @@ retry:
 	error = security_path_symlink(&path, dentry, from->name);
 	if (!error)
 		error = vfs_symlink(path.dentry->d_inode, dentry, from->name);
+	if (!error)
+		ima_link_create(&path, dentry, from->name);
 	done_path_create(&path, dentry);
 	if (retry_estale(error, lookup_flags)) {
 		lookup_flags |= LOOKUP_REVAL;
@@ -4690,7 +4693,9 @@ static int generic_readlink(struct dentry *dentry, char __user *buffer,
 		if (IS_ERR(link))
 			return PTR_ERR(link);
 	}
-	res = readlink_copy(buffer, buflen, link);
+	res = ima_link_check(dentry, link);
+	if (!res)
+		res = readlink_copy(buffer, buflen, link);
 	do_delayed_call(&done);
 	return res;
 }
@@ -4711,6 +4716,7 @@ int vfs_readlink(struct dentry *dentry, char __user *buffer, int buflen)
 
 	if (unlikely(!(inode->i_opflags & IOP_DEFAULT_READLINK))) {
 		if (unlikely(inode->i_op->readlink))
+			// copy_from_user??? and call ima_link_check()?
 			return inode->i_op->readlink(dentry, buffer, buflen);
 
 		if (!d_is_symlink(dentry))
